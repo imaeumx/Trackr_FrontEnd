@@ -1,0 +1,256 @@
+// src/screens/ProfileScreen.js
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../hooks/useAuth';
+
+const ProfileScreen = ({ navigation }) => {
+  const { currentUser, isLoggedIn, signOut } = useAuth();
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive',
+          onPress: () => {
+            signOut();
+            navigation.goBack();
+            Alert.alert('Signed Out', 'You have been successfully signed out.');
+          }
+        }
+      ]
+    );
+  };
+
+  if (!isLoggedIn) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>TrackR</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Sign In')}>
+            <Text style={styles.signInText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.notLoggedInContainer}>
+          <Ionicons name="person-circle-outline" size={80} color="#7B7C7D" />
+          <Text style={styles.notLoggedInTitle}>Not Signed In</Text>
+          <Text style={styles.notLoggedInText}>
+            Please sign in to view your profile
+          </Text>
+          <TouchableOpacity 
+            style={styles.signInButton}
+            onPress={() => navigation.navigate('Sign In')}
+          >
+            <Text style={styles.signInButtonText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.logo}>TrackR</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={24} color="#F5F5F5" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.profileHeader}>
+          <View style={styles.avatar}>
+            <Ionicons name="person-circle" size={80} color="#00D084" />
+          </View>
+          <Text style={styles.username}>{currentUser?.username}</Text>
+          <Text style={styles.userId}>User ID: {currentUser?.id}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          
+          <TouchableOpacity style={styles.menuItem}>
+            <Ionicons name="list" size={24} color="#00D084" />
+            <Text style={styles.menuText}>My Lists</Text>
+            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <Ionicons name="heart" size={24} color="#00D084" />
+            <Text style={styles.menuText}>Favorites</Text>
+            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <Ionicons name="time" size={24} color="#00D084" />
+            <Text style={styles.menuText}>Watch History</Text>
+            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Settings</Text>
+          
+          <TouchableOpacity style={styles.menuItem}>
+            <Ionicons name="notifications" size={24} color="#00D084" />
+            <Text style={styles.menuText}>Notifications</Text>
+            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <Ionicons name="moon" size={24} color="#00D084" />
+            <Text style={styles.menuText}>Dark Mode</Text>
+            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <Ionicons name="help-circle" size={24} color="#00D084" />
+            <Text style={styles.menuText}>Help & Support</Text>
+            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+          <Ionicons name="log-out" size={24} color="#E53935" />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#141517',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    paddingTop: 50,
+    backgroundColor: '#1A1B1D',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2B2D',
+  },
+  logo: {
+    fontSize: 25,
+    fontWeight: 'bold',
+    color: '#00D084',
+  },
+  signInText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#F5F5F5',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  notLoggedInContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  notLoggedInTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#F5F5F5',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  notLoggedInText: {
+    fontSize: 16,
+    color: '#7B7C7D',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  signInButton: {
+    backgroundColor: '#00D084',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  signInButtonText: {
+    color: '#141517',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  profileHeader: {
+    alignItems: 'center',
+    padding: 32,
+    backgroundColor: '#1A1B1D',
+    margin: 16,
+    borderRadius: 12,
+  },
+  avatar: {
+    marginBottom: 16,
+  },
+  username: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#F5F5F5',
+    marginBottom: 8,
+  },
+  userId: {
+    fontSize: 14,
+    color: '#7B7C7D',
+  },
+  section: {
+    marginBottom: 24,
+    paddingHorizontal: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F5F5F5',
+    marginBottom: 16,
+    marginLeft: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A1B1D',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  menuText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#F5F5F5',
+    marginLeft: 12,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2A1B1D',
+    padding: 16,
+    margin: 16,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#E53935',
+    justifyContent: 'center',
+  },
+  signOutText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#E53935',
+    marginLeft: 8,
+  },
+});
+
+export default ProfileScreen;
