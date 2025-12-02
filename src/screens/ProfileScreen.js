@@ -3,13 +3,13 @@ import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import { globalStyles, colors } from '../styles/globalStyles';
+import CustomScrollView from '../components/CustomScrollView';
 
 const ProfileScreen = ({ navigation }) => {
   const { currentUser, isLoggedIn, signOut } = useAuth();
@@ -23,9 +23,21 @@ const ProfileScreen = ({ navigation }) => {
         { 
           text: 'Sign Out', 
           style: 'destructive',
-          onPress: () => {
-            signOut();
-            navigation.goBack();
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (err) {
+              console.error('Sign out error:', err);
+            }
+
+            // Reset navigation stack to Home after sign out
+            try {
+              navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+            } catch (e) {
+              // fallback
+              navigation.navigate('Home');
+            }
+
             Alert.alert('Signed Out', 'You have been successfully signed out.');
           }
         }
@@ -35,15 +47,15 @@ const ProfileScreen = ({ navigation }) => {
 
   if (!isLoggedIn) {
     return (
-      <View style={styles.container}>
+      <View style={globalStyles.container}>
         <View style={styles.header}>
-          <Text style={styles.logo}>TrackR</Text>
+          <Text style={globalStyles.logo}>TrackR</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Sign In')}>
             <Text style={styles.signInText}>Sign In</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.notLoggedInContainer}>
-          <Ionicons name="person-circle-outline" size={80} color="#7B7C7D" />
+          <Ionicons name="person-circle-outline" size={80} color={colors.textSecondary} />
           <Text style={styles.notLoggedInTitle}>Not Signed In</Text>
           <Text style={styles.notLoggedInText}>
             Please sign in to view your profile
@@ -60,19 +72,23 @@ const ProfileScreen = ({ navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={globalStyles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.logo}>TrackR</Text>
+        <Text style={globalStyles.logo}>TrackR</Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={24} color="#F5F5F5" />
+          <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
+      <CustomScrollView
+        style={globalStyles.scrollView}
+        contentContainerStyle={globalStyles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.profileHeader}>
           <View style={styles.avatar}>
-            <Ionicons name="person-circle" size={80} color="#00D084" />
+            <Ionicons name="person-circle" size={80} color={colors.primary} />
           </View>
           <Text style={styles.username}>{currentUser?.username}</Text>
           <Text style={styles.userId}>User ID: {currentUser?.id}</Text>
@@ -82,21 +98,21 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Account</Text>
           
           <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="list" size={24} color="#00D084" />
+            <Ionicons name="list" size={24} color={colors.primary} />
             <Text style={styles.menuText}>My Lists</Text>
-            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="heart" size={24} color="#00D084" />
+            <Ionicons name="heart" size={24} color={colors.primary} />
             <Text style={styles.menuText}>Favorites</Text>
-            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="time" size={24} color="#00D084" />
+            <Ionicons name="time" size={24} color={colors.primary} />
             <Text style={styles.menuText}>Watch History</Text>
-            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -104,60 +120,48 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Settings</Text>
           
           <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="notifications" size={24} color="#00D084" />
+            <Ionicons name="notifications" size={24} color={colors.primary} />
             <Text style={styles.menuText}>Notifications</Text>
-            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="moon" size={24} color="#00D084" />
+            <Ionicons name="moon" size={24} color={colors.primary} />
             <Text style={styles.menuText}>Dark Mode</Text>
-            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="help-circle" size={24} color="#00D084" />
+            <Ionicons name="help-circle" size={24} color={colors.primary} />
             <Text style={styles.menuText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Ionicons name="log-out" size={24} color="#E53935" />
+          <Ionicons name="log-out" size={24} color={colors.error} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </CustomScrollView>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#141517',
-  },
+const styles = {
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    padding: 16,
     paddingTop: 50,
-    backgroundColor: '#1A1B1D',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2B2D',
-  },
-  logo: {
-    fontSize: 25,
-    fontWeight: 'bold',
-    color: '#00D084',
+    borderBottomColor: colors.border,
   },
   signInText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#F5F5F5',
-  },
-  scrollView: {
-    flex: 1,
+    color: colors.text,
   },
   notLoggedInContainer: {
     flex: 1,
@@ -168,31 +172,31 @@ const styles = StyleSheet.create({
   notLoggedInTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#F5F5F5',
+    color: colors.text,
     marginTop: 24,
     marginBottom: 12,
   },
   notLoggedInText: {
     fontSize: 16,
-    color: '#7B7C7D',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 32,
   },
   signInButton: {
-    backgroundColor: '#00D084',
+    backgroundColor: colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderRadius: 8,
   },
   signInButtonText: {
-    color: '#141517',
+    color: colors.background,
     fontSize: 16,
     fontWeight: 'bold',
   },
   profileHeader: {
     alignItems: 'center',
     padding: 32,
-    backgroundColor: '#1A1B1D',
+    backgroundColor: colors.card,
     margin: 16,
     borderRadius: 12,
   },
@@ -202,12 +206,12 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#F5F5F5',
+    color: colors.text,
     marginBottom: 8,
   },
   userId: {
     fontSize: 14,
-    color: '#7B7C7D',
+    color: colors.textSecondary,
   },
   section: {
     marginBottom: 24,
@@ -216,14 +220,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F5F5F5',
+    color: colors.text,
     marginBottom: 16,
     marginLeft: 16,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1B1D',
+    backgroundColor: colors.card,
     padding: 16,
     borderRadius: 8,
     marginBottom: 8,
@@ -231,7 +235,7 @@ const styles = StyleSheet.create({
   menuText: {
     flex: 1,
     fontSize: 16,
-    color: '#F5F5F5',
+    color: colors.text,
     marginLeft: 12,
   },
   signOutButton: {
@@ -242,15 +246,15 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#E53935',
+    borderLeftColor: colors.error,
     justifyContent: 'center',
   },
   signOutText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#E53935',
+    color: colors.error,
     marginLeft: 8,
   },
-});
+};
 
 export default ProfileScreen;

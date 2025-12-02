@@ -1,4 +1,4 @@
-// src/services/auth.js
+// src/services/auth.js - UPDATED WITH PERSISTENCE
 import api, { setAuthToken, getAuthToken, setCurrentUser, getCurrentUser } from './api';
 
 // Create an event emitter for auth state changes
@@ -25,7 +25,8 @@ export const authService = {
         setAuthToken(response.data.access);
         const user = {
           id: response.data.user_id,
-          username: response.data.username
+          username: response.data.username,
+          email: response.data.email
         };
         setCurrentUser(user);
         console.log('Sign up successful, token set');
@@ -54,16 +55,31 @@ export const authService = {
         setAuthToken(response.data.access);
         const user = {
           id: response.data.user_id,
-          username: response.data.username // FIXED: was response.username, should be response.data.username
+          username: response.data.username,
+          email: response.data.email
         };
         setCurrentUser(user);
         console.log('Sign in successful, token set');
         this.notifyAuthChange(true, user);
+        return response.data;
+      } else {
+        throw new Error('No access token received from server');
       }
-      return response.data;
     } catch (error) {
       console.error('Sign in error:', error);
-      throw error.formattedMessage || error.response?.data || error;
+      
+      // Handle specific error cases
+      if (error.response?.status === 401) {
+        throw 'Invalid username or password';
+      } else if (error.response?.status === 404) {
+        throw 'User does not exist';
+      } else if (error.response?.data?.error) {
+        throw error.response.data.error;
+      } else if (error.formattedMessage) {
+        throw error.formattedMessage;
+      } else {
+        throw 'Login failed. Please try again.';
+      }
     }
   },
 
@@ -94,12 +110,13 @@ export const authService = {
     return getAuthToken();
   },
 
-  // Validate token - FIXED: Don't automatically set user data
+  // Validate token - with localStorage check
   async validateToken() {
     try {
       const token = getAuthToken();
       const currentUser = getCurrentUser();
       
+      // Check localStorage for web persistence
       if (!token || !currentUser) {
         this.notifyAuthChange(false, null);
         return false;
@@ -122,7 +139,8 @@ export const authService = {
       if (error.response?.status === 401 || error.response?.status === 403) {
         this.signOut();
       } else {
-        // For other errors, don't automatically sign out, just notify as not authenticated
+        // For other errors (like network issues), don't sign out
+        // Just notify as not authenticated temporarily
         this.notifyAuthChange(false, null);
       }
       return false;
@@ -145,11 +163,23 @@ export const authService = {
 
   // Initialize auth state - call this when app starts
   async initialize() {
+    console.log('Initializing auth service...');
+    
     // Clear any demo data first
     this.clearDemoData();
     
-    // Then validate token if exists
-    return await this.validateToken();
+    // Check if we have stored auth data
+    const token = getAuthToken();
+    const user = getCurrentUser();
+    
+    if (token && user) {
+      console.log('Found stored auth data, validating...');
+      return await this.validateToken();
+    } else {
+      console.log('No stored auth data found');
+      this.notifyAuthChange(false, null);
+      return false;
+    }
   },
 
   // Event listener methods
@@ -162,6 +192,7 @@ export const authService = {
   },
 
   notifyAuthChange(isAuthenticated, user) {
+    console.log('Auth state changed:', isAuthenticated, user);
     authListeners.forEach(callback => {
       try {
         callback(isAuthenticated, user);

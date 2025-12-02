@@ -3,12 +3,12 @@ import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   FlatList,
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { globalStyles, colors } from '../styles/globalStyles';
 
 const MyListsScreen = ({ navigation }) => {
   // Mock data for lists
@@ -47,53 +47,71 @@ const MyListsScreen = ({ navigation }) => {
         >
           <Ionicons name="trash-outline" size={20} color="#FF3B30" />
         </TouchableOpacity>
-        <Ionicons name="chevron-forward" size={20} color="#666" />
+        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
       </View>
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>My Lists</Text>
+    <View style={globalStyles.container}>
+      <View style={styles.header}>
+        <Text style={globalStyles.logo}>TrackR</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
       
-      {lists.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="list-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>No lists yet</Text>
-          <Text style={styles.emptySubtext}>Create your first list to get started</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={lists}
-          renderItem={renderList}
-          keyExtractor={item => item.id.toString()}
-          style={styles.list}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-      
-      <TouchableOpacity 
-        style={styles.createButton}
-        onPress={() => navigation.navigate('CreateList')}
-      >
-        <Ionicons name="add" size={24} color="#007AFF" />
-        <Text style={styles.createButtonText}>Create New List</Text>
-      </TouchableOpacity>
+      <View style={styles.content}>
+        <Text style={styles.title}>My Lists</Text>
+        
+        {lists.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="list-outline" size={64} color={colors.textSecondary} />
+            <Text style={styles.emptyText}>No lists yet</Text>
+            <Text style={styles.emptySubtext}>Create your first list to get started</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={lists}
+            renderItem={renderList}
+            keyExtractor={item => item.id.toString()}
+            style={styles.list}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+        
+        <TouchableOpacity 
+          style={styles.createButton}
+          onPress={() => navigation.navigate('CreateList')}
+        >
+          <Ionicons name="add" size={24} color={colors.primary} />
+          <Text style={styles.createButtonText}>Create New List</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const styles = {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    paddingTop: 50,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  content: {
     flex: 1,
-    backgroundColor: '#fff',
     padding: 16,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#000',
+    color: colors.text,
   },
   list: {
     flex: 1,
@@ -103,7 +121,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.card,
     borderRadius: 8,
     marginBottom: 12,
   },
@@ -114,16 +132,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
-    color: '#000',
+    color: colors.text,
   },
   listDescription: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   listCount: {
     fontSize: 12,
-    color: '#007AFF',
+    color: colors.primary,
     fontWeight: '500',
   },
   listActions: {
@@ -143,13 +161,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   createButton: {
@@ -157,7 +175,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.card,
     borderRadius: 8,
     marginTop: 16,
   },
@@ -165,8 +183,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: colors.primary,
   },
-});
+};
 
 export default MyListsScreen;

@@ -3,12 +3,12 @@ import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   FlatList,
   TouchableOpacity,
   Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { globalStyles, colors } from '../styles/globalStyles';
 
 const SearchResultsScreen = ({ route, navigation }) => {
   const { results, query } = route.params;
@@ -17,17 +17,28 @@ const SearchResultsScreen = ({ route, navigation }) => {
     <TouchableOpacity 
       style={styles.resultItem}
       onPress={() => navigation.navigate('MovieDetail', { 
-        movie: item,
+        movie: {
+          id: item.id,
+          title: item.title || item.name,
+          type: item.media_type === 'movie' ? 'movie' : 'series',
+          rating: item.vote_average ? (item.vote_average / 2).toFixed(1) : 'N/A'
+        },
         tmdbId: item.id 
       })}
     >
       <View style={styles.posterContainer}>
         {item.poster_path ? (
-          <Text style={styles.posterPlaceholder}>🖼️</Text>
+          <Image
+            source={{ uri: `https://image.tmdb.org/t/p/w200${item.poster_path}` }}
+            style={styles.posterImage}
+            resizeMode="cover"
+          />
         ) : (
-          <Text style={styles.posterPlaceholder}>
-            {item.media_type === 'movie' ? '🎬' : '📺'}
-          </Text>
+          <View style={styles.posterPlaceholder}>
+            <Text style={styles.posterPlaceholderText}>
+              {item.media_type === 'movie' ? '🎬' : '📺'}
+            </Text>
+          </View>
         )}
       </View>
       <View style={styles.resultInfo}>
@@ -43,9 +54,9 @@ const SearchResultsScreen = ({ route, navigation }) => {
           {item.overview}
         </Text>
         <View style={styles.ratingContainer}>
-          <Ionicons name="star" size={14} color="#FFC700" />
+          <Ionicons name="star" size={14} color={colors.warning} />
           <Text style={styles.rating}>
-            {(item.vote_average / 2).toFixed(1)}
+            {item.vote_average ? (item.vote_average / 2).toFixed(1) : 'N/A'}
           </Text>
         </View>
       </View>
@@ -53,7 +64,7 @@ const SearchResultsScreen = ({ route, navigation }) => {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={globalStyles.container}>
       <View style={styles.header}>
         <Text style={styles.resultsTitle}>
           Search Results for "{query}"
@@ -73,42 +84,47 @@ const SearchResultsScreen = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#141517',
-  },
+const styles = {
   header: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2B2D',
+    borderBottomColor: colors.border,
   },
   resultsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F5F5F5',
+    color: colors.text,
     marginBottom: 4,
   },
   resultsCount: {
     fontSize: 14,
-    color: '#7B7C7D',
+    color: colors.textSecondary,
   },
   resultItem: {
     flexDirection: 'row',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2B2D',
+    borderBottomColor: colors.border,
   },
   posterContainer: {
     width: 60,
     height: 90,
-    backgroundColor: '#1A1B1D',
     borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
     marginRight: 12,
   },
+  posterImage: {
+    width: '100%',
+    height: '100%',
+  },
   posterPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  posterPlaceholderText: {
     fontSize: 24,
   },
   resultInfo: {
@@ -117,17 +133,17 @@ const styles = StyleSheet.create({
   resultTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#F5F5F5',
+    color: colors.text,
     marginBottom: 4,
   },
   resultDetails: {
     fontSize: 12,
-    color: '#7B7C7D',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   resultOverview: {
     fontSize: 12,
-    color: '#7B7C7D',
+    color: colors.textSecondary,
     lineHeight: 16,
     marginBottom: 6,
   },
@@ -137,10 +153,10 @@ const styles = StyleSheet.create({
   },
   rating: {
     fontSize: 12,
-    color: '#FFC700',
+    color: colors.warning,
     marginLeft: 4,
     fontWeight: '600',
   },
-});
+};
 
 export default SearchResultsScreen;

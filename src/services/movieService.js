@@ -2,18 +2,11 @@
 import api from './api';
 
 export const movieService = {
-  // Get now playing movies
+  // Get now playing movies - NOT AVAILABLE in your backend
   async getNowPlayingMovies(page = 1) {
     try {
-      const response = await api.get('/tmdb/now-playing/', {
-        params: { page }
-      });
-      
-      if (!response.data || !Array.isArray(response.data.results)) {
-        throw new Error('Invalid response format from server');
-      }
-      
-      return response.data;
+      // Since you don't have this endpoint, let's use popular movies instead
+      return await this.getPopularMovies('movie', page);
     } catch (error) {
       console.error('Get now playing movies error:', error);
       throw error.response?.data || error.message || 'Failed to load now playing movies';
@@ -42,7 +35,7 @@ export const movieService = {
     }
   },
 
-  // Get popular movies
+  // Get popular movies - THIS IS AVAILABLE in your backend
   async getPopularMovies(type = 'movie', page = 1) {
     try {
       const response = await api.get('/tmdb/popular/', {
@@ -60,7 +53,7 @@ export const movieService = {
     }
   },
 
-  // Get movie details from TMDB
+  // Get movie details from TMDB - THIS IS AVAILABLE
   async getMovieDetails(tmdbId) {
     try {
       if (!tmdbId) {
@@ -80,7 +73,7 @@ export const movieService = {
     }
   },
 
-  // Get TV show details from TMDB
+  // Get TV show details from TMDB - THIS IS AVAILABLE
   async getTVDetails(tmdbId) {
     try {
       if (!tmdbId) {
@@ -100,7 +93,7 @@ export const movieService = {
     }
   },
 
-  // Get or create movie in local database
+  // Get or create movie in local database - THIS IS AVAILABLE
   async getOrCreateMovie(tmdbId, mediaType = 'movie') {
     try {
       if (!tmdbId) {
@@ -119,7 +112,7 @@ export const movieService = {
     }
   },
 
-  // Get all local movies
+  // Get all local movies - THIS IS AVAILABLE
   async getLocalMovies() {
     try {
       const response = await api.get('/movies/');
@@ -135,7 +128,7 @@ export const movieService = {
     }
   },
 
-  // Create a movie manually
+  // Create a movie manually - THIS IS AVAILABLE
   async createMovie(movieData) {
     try {
       const requiredFields = ['title'];
@@ -153,7 +146,7 @@ export const movieService = {
     }
   },
 
-  // Get movie by ID from local database
+  // Get movie by ID from local database - THIS IS AVAILABLE
   async getMovieById(movieId) {
     try {
       if (!movieId) {
@@ -168,7 +161,7 @@ export const movieService = {
     }
   },
 
-  // Update movie in local database
+  // Update movie in local database - THIS IS AVAILABLE
   async updateMovie(movieId, movieData) {
     try {
       if (!movieId) {
@@ -183,7 +176,7 @@ export const movieService = {
     }
   },
 
-  // Delete movie from local database
+  // Delete movie from local database - THIS IS AVAILABLE
   async deleteMovie(movieId) {
     try {
       if (!movieId) {
@@ -198,39 +191,36 @@ export const movieService = {
     }
   },
 
-  // Get trending movies (additional useful function)
+  // Get trending movies - NOT AVAILABLE in your backend
   async getTrendingMovies(timeWindow = 'week') {
     try {
-      const response = await api.get('/tmdb/trending/', {
-        params: { time_window: timeWindow, type: 'movie' }
-      });
-      
-      if (!response.data || !Array.isArray(response.data.results)) {
-        throw new Error('Invalid trending movies response');
-      }
-      
-      return response.data;
+      // Since you don't have this endpoint, let's use popular movies
+      return await this.getPopularMovies('movie', 1);
     } catch (error) {
       console.error('Get trending movies error:', error);
       throw error.response?.data || error.message || 'Failed to load trending movies';
     }
   },
 
-  // Get upcoming movies (additional useful function)
+  // Get upcoming movies - NOT AVAILABLE in your backend
   async getUpcomingMovies(page = 1) {
     try {
-      const response = await api.get('/tmdb/upcoming/', {
-        params: { page }
-      });
-      
-      if (!response.data || !Array.isArray(response.data.results)) {
-        throw new Error('Invalid upcoming movies response');
-      }
-      
-      return response.data;
+      // Since you don't have this endpoint, let's use popular movies
+      return await this.getPopularMovies('movie', page);
     } catch (error) {
       console.error('Get upcoming movies error:', error);
       throw error.response?.data || error.message || 'Failed to load upcoming movies';
+    }
+  },
+
+  // NEW: Get top rated movies - NOT AVAILABLE in your backend
+  async getTopRatedMovies(page = 1) {
+    try {
+      // Since you don't have this endpoint, let's use popular movies
+      return await this.getPopularMovies('movie', page);
+    } catch (error) {
+      console.error('Get top rated movies error:', error);
+      throw error.response?.data || error.message || 'Failed to load top rated movies';
     }
   }
 };

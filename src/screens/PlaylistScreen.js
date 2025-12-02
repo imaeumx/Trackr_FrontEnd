@@ -2,22 +2,24 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
-  RefreshControl,
-  FlatList
+  Text,
+  TouchableOpacity,
+  FlatList,
+  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Header from '../components/Header';
+import FeaturedCarousel from '../components/FeaturedCarousel'; // Add this import
+import CustomScrollView from '../components/CustomScrollView';
 import { playlistService } from '../services/playlistService';
 import { authService } from '../services/auth';
+import { globalStyles, colors } from '../styles/globalStyles';
 
 const PlaylistScreen = ({ navigation }) => {
   const [playlists, setPlaylists] = useState([]);
+  const [featuredPlaylists, setFeaturedPlaylists] = useState([]); // Add this
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -38,13 +40,18 @@ const PlaylistScreen = ({ navigation }) => {
     }
   }, [isLoggedIn]);
 
+  const handleRefresh = async () => {
+    if (!isLoggedIn) return;
+    setRefreshing(true);
+    await loadPlaylists();
+    setRefreshing(false);
+  };
+
   const checkAuthStatus = async () => {
     try {
       const authenticated = await authService.validateToken();
       const user = authService.getCurrentUser();
-      
-      console.log('Auth status check - Authenticated:', authenticated, 'User:', user);
-      
+
       setIsLoggedIn(authenticated);
       setCurrentUser(user);
     } catch (error) {
@@ -58,10 +65,69 @@ const PlaylistScreen = ({ navigation }) => {
 
   const loadPlaylists = async () => {
     if (!isLoggedIn) return;
-    
+
     try {
       setLoading(true);
       setError(null);
+
+      // Try to fetch real trending data for featured section (TMDB)
+      const TMDB_API_KEY = 'b5ae97629b66c7bff8eaa682cefcc1cf';
+      let featuredData = [];
+      try {
+        const trendingResponse = await fetch(
+          `https://api.themoviedb.org/3/trending/all/week?api_key=${TMDB_API_KEY}`
+        );
+        const trendingJson = await trendingResponse.json();
+        featuredData = (trendingJson.results || []).slice(0, 4).map((item, idx) => ({
+          id: `featured-${idx + 1}`,
+          title: item.title || item.name || `Featured ${idx + 1}`,
+          description: (item.overview && item.overview.length > 0) ? (item.overview.substring(0, 120) + '...') : 'Featured content',
+          image: item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : (item.poster_path ? `https://image.tmdb.org/t/p/w1280${item.poster_path}` : ''),
+          type: item.media_type === 'tv' ? 'series' : 'movie',
+          count: Math.floor(Math.random() * 30) + 10
+        }));
+      } catch (err) {
+        console.warn('Failed to fetch TMDB trending for featured playlists, using fallback data.', err);
+      }
+
+      if (!featuredData || featuredData.length === 0) {
+        featuredData = [
+          {
+            id: 'featured-1',
+            title: 'Trending Now',
+            description: 'Most popular movies and series this week',
+            image: 'https://image.tmdb.org/t/p/w1280/jD98aUKHQZNAmrk0wQQ9wH8dYGC.jpg',
+            type: 'playlist',
+            count: 25
+          },
+          {
+            id: 'featured-2',
+            title: 'Classic Collection',
+            description: 'Timeless movies everyone should watch',
+            image: 'https://image.tmdb.org/t/p/w1280/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg',
+            type: 'playlist',
+            count: 20
+          },
+          {
+            id: 'featured-3',
+            title: 'Hidden Gems',
+            description: 'Underrated movies you might have missed',
+            image: 'https://image.tmdb.org/t/p/w1280/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg',
+            type: 'playlist',
+            count: 15
+          },
+          {
+            id: 'featured-4',
+            title: 'Award Winners',
+            description: 'Oscar-winning films and series',
+            image: 'https://image.tmdb.org/t/p/w1280/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg',
+            type: 'playlist',
+            count: 30
+          }
+        ];
+      }
+
+      setFeaturedPlaylists(featuredData);
 
       // Load playlists from API
       const playlistsData = await playlistService.getPlaylists();
@@ -85,37 +151,19 @@ const PlaylistScreen = ({ navigation }) => {
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-    
+
     if (!isLoggedIn) {
       Alert.alert('Sign In Required', 'Please sign in to search playlists.');
       return;
     }
-    
-    // Implement search functionality for playlists
+
     Alert.alert('Search', `Searching for: ${searchQuery}`);
   };
 
   const handleProfilePress = () => {
     if (isLoggedIn) {
-      Alert.alert(
-        'Profile',
-        `Welcome, ${currentUser?.username}!`,
-        [
-          { text: 'My Lists', onPress: () => navigation.navigate('MyLists') },
-          { 
-            text: 'Sign Out', 
-            style: 'destructive',
-            onPress: () => {
-              authService.signOut();
-              setIsLoggedIn(false);
-              setCurrentUser(null);
-              setPlaylists([]);
-              Alert.alert('Signed Out', 'You have been successfully signed out.');
-            }
-          },
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
+      // Navigate directly to Profile screen - NO ALERT
+      navigation.navigate('Profile');
     } else {
       navigation.navigate('Sign In');
     }
@@ -139,13 +187,32 @@ const PlaylistScreen = ({ navigation }) => {
     Alert.alert(playlist.title, `Viewing playlist: ${playlist.title}`);
   };
 
+  const handleFeaturedPress = (item) => {
+    if (!isLoggedIn) {
+      Alert.alert('Sign In Required', 'Please sign in to view featured playlists.');
+      navigation.navigate('Sign In');
+      return;
+    }
+
+    // Navigate to a detail screen when a featured item is pressed
+    if (item.type === 'movie' || item.type === 'series') {
+      navigation.navigate('MovieDetail', {
+        movieId: item.id,
+        mediaType: item.type === 'series' ? 'tv' : 'movie'
+      });
+    } else {
+      // For playlist-style featured items, open the user's lists screen
+      navigation.navigate('MyLists');
+    }
+  };
+
   const renderPlaylistItem = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.playlistCard}
       onPress={() => handlePlaylistPress(item)}
     >
       <View style={styles.playlistIcon}>
-        <Ionicons name="list" size={24} color="#00D084" />
+        <Ionicons name="list" size={24} color={colors.primary} />
       </View>
       <View style={styles.playlistInfo}>
         <Text style={styles.playlistTitle}>{item.title}</Text>
@@ -156,17 +223,17 @@ const PlaylistScreen = ({ navigation }) => {
           {item.item_count || 0} items
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#7B7C7D" />
+      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
     </TouchableOpacity>
   );
 
   const renderCreatePlaylistCard = () => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.createPlaylistCard}
       onPress={handleCreatePlaylist}
     >
       <View style={styles.createPlaylistIcon}>
-        <Ionicons name="add-circle" size={32} color="#00D084" />
+        <Ionicons name="add-circle" size={32} color={colors.primary} />
       </View>
       <Text style={styles.createPlaylistText}>Create New Playlist</Text>
     </TouchableOpacity>
@@ -174,18 +241,18 @@ const PlaylistScreen = ({ navigation }) => {
 
   const renderSignInPrompt = () => (
     <View style={styles.signInContainer}>
-      <Ionicons name="lock-closed" size={64} color="#7B7C7D" />
+      <Ionicons name="lock-closed" size={64} color={colors.textSecondary} />
       <Text style={styles.signInTitle}>Sign In Required</Text>
       <Text style={styles.signInText}>
         Please sign in to access your playlists and create new ones.
       </Text>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.signInButton}
         onPress={() => navigation.navigate('Sign In')}
       >
         <Text style={styles.signInButtonText}>Sign In</Text>
       </TouchableOpacity>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.guestButton}
         onPress={() => navigation.goBack()}
       >
@@ -196,86 +263,33 @@ const PlaylistScreen = ({ navigation }) => {
 
   if (!authChecked || loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00D084" />
-        <Text style={styles.loadingText}>Loading...</Text>
+      <View style={globalStyles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={globalStyles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Fixed Header - Same as HomeScreen */}
-      <View style={styles.header}>
-        <Text style={styles.logo}>TrackR</Text>
-        
-        {/* Menu and Search combined on the right side */}
-        <View style={styles.rightContainer}>
+    <View style={globalStyles.container}>
+      <Header
+        navigation={navigation}
+        activeScreen="Playlist"
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        onSearch={handleSearch}
+        isLoggedIn={isLoggedIn}
+        currentUser={currentUser}
+        onProfilePress={handleProfilePress}
+        searchPlaceholder={isLoggedIn ? "Search playlists..." : "Sign in to search..."}
+        searchEditable={isLoggedIn}
+      />
 
-          {/* Search next to menu */}
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder={isLoggedIn ? "Search playlists..." : "Sign in to search..."}
-              placeholderTextColor="#7B7C7D"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-              editable={isLoggedIn}
-            />
-            <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
-              <Ionicons name="search" size={16} color="#7B7C7D" />
-            </TouchableOpacity>
-          </View>
-          
-          {/* Menu items - Home Films Series Playlist */}
-          <View style={styles.menuContainer}>
-            <TouchableOpacity onPress={() => navigation.navigate('Home')}>
-              <Text style={styles.menuText}>Home</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('Films')}>
-              <Text style={styles.menuText}>Films</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('Series')}>
-              <Text style={styles.menuText}>Series</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('Playlist')}>
-              <Text style={[styles.menuText, styles.activeMenuText]}>Playlist</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Profile / Sign In - FIXED ALIGNMENT */}
-          <TouchableOpacity onPress={handleProfilePress} style={styles.profileButton}>
-            <View style={styles.profileContainer}>
-              {isLoggedIn ? (
-                <>
-                  <Ionicons name="person-circle" size={20} color="#00D084" />
-                  <Text style={styles.usernameText}>
-                    {currentUser?.username}
-                  </Text>
-                </>
-              ) : (
-                <Text style={styles.signInText}>Sign In</Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Scrollable Content */}
-      <ScrollView 
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#00D084']}
-            tintColor="#00D084"
-            enabled={isLoggedIn}
-          />
-        }
-        contentContainerStyle={styles.scrollContent}
+      <CustomScrollView
+        style={globalStyles.scrollView}
+        contentContainerStyle={[globalStyles.scrollContent, { minHeight: Dimensions.get('window').height - 120 }]}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
       >
         {!isLoggedIn ? (
           // Show sign in prompt for non-authenticated users
@@ -285,28 +299,34 @@ const PlaylistScreen = ({ navigation }) => {
           <>
             {/* Error Message */}
             {error && (
-              <View style={styles.errorContainer}>
-                <Ionicons name="warning" size={20} color="#E53935" />
-                <Text style={styles.errorText}>{error}</Text>
+              <View style={globalStyles.errorContainer}>
+                <Text style={globalStyles.errorText}>{error}</Text>
               </View>
             )}
 
             {/* Welcome Message */}
-            <View style={styles.welcomeContainer}>
-              <Text style={styles.welcomeText}>
+            <View style={globalStyles.welcomeContainer}>
+              <Text style={globalStyles.welcomeText}>
                 Welcome back, {currentUser?.username}! 👋
               </Text>
-              <Text style={styles.welcomeSubtext}>
+              <Text style={globalStyles.welcomeSubtext}>
                 Manage your movie and series playlists
               </Text>
             </View>
 
+            {/* Featured Playlists Carousel */}
+            <FeaturedCarousel
+              title="Featured Collections"
+              items={featuredPlaylists}
+              onItemPress={handleFeaturedPress}
+              autoPlay={true}
+            />
             {/* Create Playlist Card */}
             {renderCreatePlaylistCard()}
 
             {/* Playlists List */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Your Playlists ({playlists.length})</Text>
+            <View style={globalStyles.section}>
+              <Text style={globalStyles.sectionTitle}>Your Playlists ({playlists.length})</Text>
               {playlists.length > 0 ? (
                 <FlatList
                   data={playlists}
@@ -316,7 +336,7 @@ const PlaylistScreen = ({ navigation }) => {
                 />
               ) : (
                 <View style={styles.emptyState}>
-                  <Ionicons name="list" size={48} color="#7B7C7D" />
+                  <Ionicons name="list" size={48} color={colors.textSecondary} />
                   <Text style={styles.emptyTitle}>No playlists yet</Text>
                   <Text style={styles.emptySubtitle}>
                     Create your first playlist to organize your movies and series
@@ -328,184 +348,16 @@ const PlaylistScreen = ({ navigation }) => {
         )}
 
         {/* Extra space to ensure scrolling works */}
-        <View style={styles.bottomPadding} />
-      </ScrollView>
+        <View style={globalStyles.bottomPadding} />
+      </CustomScrollView>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#141517',
-  },
-  // Header Styles (Fixed alignment)
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: 50,
-    backgroundColor: '#1A1B1D',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2B2D',
-  },
-  logo: {
-    fontSize: 25,
-    fontWeight: 'bold',
-    color: '#00D084',
-  },
-  rightContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    flex: 1,
-  },
-  menuContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  menuText: {
-    marginLeft: 20,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#F5F5F5',
-  },
-  activeMenuText: {
-    color: '#00D084',
-    fontWeight: '600',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-    width: 160,
-    marginRight: 16,
-  },
-  searchInput: {
-    flex: 1,
-    backgroundColor: '#141517',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#2A2B2D',
-    paddingLeft: 36,
-    color: '#F5F5F5',
-    fontSize: 12,
-    height: 32,
-  },
-  searchButton: {
-    position: 'absolute',
-    left: 10,
-    zIndex: 1,
-  },
-  profileButton: {
-    paddingHorizontal: 8,
-  },
-  profileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 32,
-  },
-  usernameText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#00D084',
-    marginLeft: 6,
-  },
-  signInText: {
-    fontSize: 14, // Fixed font size to match other menu items
-    fontWeight: '500',
-    color: '#F5F5F5',
-    paddingHorizontal: 4,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#141517',
-  },
-  loadingText: {
-    color: '#7B7C7D',
-    marginTop: 16,
-    fontSize: 16,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#2A1B1D',
-    padding: 12,
-    margin: 16,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#E53935',
-  },
-  errorText: {
-    color: '#F5F5F5',
-    marginLeft: 8,
-    fontSize: 14,
-    flex: 1,
-  },
-  welcomeContainer: {
-    backgroundColor: '#1A1B1D',
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#00D084',
-  },
-  welcomeText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#F5F5F5',
-    marginBottom: 4,
-  },
-  welcomeSubtext: {
-    fontSize: 14,
-    color: '#7B7C7D',
-  },
-  section: {
-    marginBottom: 32,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 16,
-    color: '#F5F5F5',
-  },
-  createPlaylistCard: {
-    backgroundColor: '#1A1B1D',
-    margin: 16,
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#2A2B2D',
-    borderStyle: 'dashed',
-  },
-  createPlaylistIcon: {
-    marginBottom: 8,
-  },
-  createPlaylistText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#00D084',
-  },
+// Playlist-specific styles
+const styles = {
   playlistCard: {
-    backgroundColor: '#1A1B1D',
+    backgroundColor: colors.card,
     marginBottom: 12,
     padding: 16,
     borderRadius: 8,
@@ -521,17 +373,35 @@ const styles = StyleSheet.create({
   playlistTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F5F5F5',
+    color: colors.text,
     marginBottom: 4,
   },
   playlistDescription: {
     fontSize: 14,
-    color: '#7B7C7D',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   playlistStats: {
     fontSize: 12,
-    color: '#00D084',
+    color: colors.primary,
+  },
+  createPlaylistCard: {
+    backgroundColor: colors.card,
+    margin: 16,
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  createPlaylistIcon: {
+    marginBottom: 8,
+  },
+  createPlaylistText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
   },
   emptyState: {
     alignItems: 'center',
@@ -540,13 +410,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#F5F5F5',
+    color: colors.text,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#7B7C7D',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -558,26 +428,26 @@ const styles = StyleSheet.create({
   signInTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#F5F5F5',
+    color: colors.text,
     marginTop: 24,
     marginBottom: 12,
   },
   signInText: {
     fontSize: 16,
-    color: '#7B7C7D',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 32,
   },
   signInButton: {
-    backgroundColor: '#00D084',
+    backgroundColor: colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   signInButtonText: {
-    color: '#141517',
+    color: colors.background,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -585,12 +455,9 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   guestButtonText: {
-    color: '#7B7C7D',
+    color: colors.textSecondary,
     fontSize: 14,
   },
-  bottomPadding: {
-    height: 100,
-  },
-});
+};
 
 export default PlaylistScreen;

@@ -1,5 +1,6 @@
-// src/services/api.js
+// src/services/api.js - UPDATED WITH LOCALSTORAGE SUPPORT
 import axios from 'axios';
+import { Platform } from 'react-native';
 
 // Base URL - your app found localhost:8000
 const BASE_URL = 'http://localhost:8000/api';
@@ -12,15 +13,67 @@ const api = axios.create({
   },
 });
 
-// For React Native, we'll use a simple approach without localStorage
+// Storage helper for web
+const storage = {
+  getItem: (key) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return localStorage.getItem(key);
+    }
+    return null;
+  },
+  setItem: (key, value) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      localStorage.setItem(key, value);
+    }
+  },
+  removeItem: (key) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  }
+};
+
+// Auth token management
 let authToken = null;
 let currentUser = null;
 
+// Load from localStorage on initialization
+if (Platform.OS === 'web') {
+  try {
+    const savedToken = storage.getItem('trackr_auth_token');
+    const savedUser = storage.getItem('trackr_user');
+    
+    if (savedToken) {
+      authToken = savedToken;
+    }
+    
+    if (savedUser) {
+      currentUser = JSON.parse(savedUser);
+    }
+  } catch (error) {
+    console.warn('Failed to load auth from localStorage:', error);
+    // Clear invalid data
+    storage.removeItem('trackr_auth_token');
+    storage.removeItem('trackr_user');
+  }
+}
+
 export const setAuthToken = (token) => {
   authToken = token;
+  
+  // Save to localStorage for web
+  if (Platform.OS === 'web' && token) {
+    storage.setItem('trackr_auth_token', token);
+  } else if (Platform.OS === 'web' && !token) {
+    storage.removeItem('trackr_auth_token');
+  }
+  
   // If token is being set to null, also clear user
   if (!token) {
     currentUser = null;
+    if (Platform.OS === 'web') {
+      storage.removeItem('trackr_user');
+    }
   }
 };
 
@@ -30,6 +83,13 @@ export const getAuthToken = () => {
 
 export const setCurrentUser = (user) => {
   currentUser = user;
+  
+  // Save to localStorage for web
+  if (Platform.OS === 'web' && user) {
+    storage.setItem('trackr_user', JSON.stringify(user));
+  } else if (Platform.OS === 'web' && !user) {
+    storage.removeItem('trackr_user');
+  }
 };
 
 export const getCurrentUser = () => {
@@ -45,6 +105,9 @@ export const clearDemoData = () => {
   if (user && !token) {
     console.log('Clearing demo user data from api.js');
     currentUser = null;
+    if (Platform.OS === 'web') {
+      storage.removeItem('trackr_user');
+    }
     return true;
   }
   return false;
@@ -71,6 +134,12 @@ api.interceptors.response.use(
       // Token expired or invalid
       setAuthToken(null);
       setCurrentUser(null);
+      
+      // Clear localStorage on web
+      if (Platform.OS === 'web') {
+        storage.removeItem('trackr_auth_token');
+        storage.removeItem('trackr_user');
+      }
     }
     
     // Format error message
