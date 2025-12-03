@@ -85,10 +85,13 @@ export const authService = {
 
   // Sign Out
   signOut() {
+    console.log('Starting sign out process...');
     setAuthToken(null);
     setCurrentUser(null);
-    console.log('Signed out');
+    console.log('Auth token and user cleared');
+    console.log('Notifying all listeners of sign out...');
     this.notifyAuthChange(false, null);
+    console.log('Sign out complete');
   },
 
   // Get current user

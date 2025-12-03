@@ -244,16 +244,36 @@ const FilmsScreen = ({ navigation }) => {
   };
 
   const handleMoviePress = (item) => {
+    console.log('Film pressed:', item);
+    
     navigation.navigate('MovieDetail', { 
-      movieId: item.id,
-      mediaType: 'movie'
+      movieId: item.tmdbId || item.id,
+      mediaType: item.mediaType || 'movie',
+      movie: {
+        id: item.tmdbId || item.id,
+        title: item.title,
+        type: item.type || 'movie',
+        rating: item.rating,
+        year: item.year || item.release_year,
+        poster: item.poster || item.poster_url
+      }
     });
   };
 
   const handleFeaturedPress = (item) => {
+    console.log('Featured film pressed:', item);
+    
     navigation.navigate('MovieDetail', {
-      movieId: item.id,
-      mediaType: 'movie'
+      movieId: item.tmdbId || item.id,
+      mediaType: item.mediaType || 'movie',
+      movie: {
+        id: item.tmdbId || item.id,
+        title: item.title,
+        type: item.type || 'movie',
+        rating: item.rating,
+        year: item.year || item.release_year,
+        poster: item.poster
+      }
     });
   };
 
@@ -320,6 +340,7 @@ const FilmsScreen = ({ navigation }) => {
             title={`Search Results for "${searchQuery}" (${filteredFilms.length})`}
             data={filteredFilms}
             onItemPress={handleMoviePress}
+            isLoggedIn={isLoggedIn}
             showLocalBadge={true}
           />
         ) : (
@@ -330,6 +351,7 @@ const FilmsScreen = ({ navigation }) => {
               title="New Films on TrackR"
               data={newFilms}
               onItemPress={handleMoviePress}
+              isLoggedIn={isLoggedIn}
             />
 
             {/* Popular Films on TrackR */}
@@ -337,6 +359,7 @@ const FilmsScreen = ({ navigation }) => {
               title="Popular Films on TrackR"
               data={popularFilms}
               onItemPress={handleMoviePress}
+              isLoggedIn={isLoggedIn}
             />
 
             {/* Top Rated Movies */}
@@ -344,6 +367,7 @@ const FilmsScreen = ({ navigation }) => {
               title="Top Rated Movies"
               data={topRatedFilms}
               onItemPress={handleMoviePress}
+              isLoggedIn={isLoggedIn}
             />
 
             {/* Most Viewed Movies */}
@@ -351,6 +375,7 @@ const FilmsScreen = ({ navigation }) => {
               title="Most Viewed Movies"
               data={mostViewedFilms}
               onItemPress={handleMoviePress}
+              isLoggedIn={isLoggedIn}
             />
 
             {/* All Films */}
@@ -358,6 +383,7 @@ const FilmsScreen = ({ navigation }) => {
               title={`All Films (${allFilms.length})`}
               data={allFilms}
               onItemPress={handleMoviePress}
+              isLoggedIn={isLoggedIn}
               showLocalBadge={true}
             />
           </>

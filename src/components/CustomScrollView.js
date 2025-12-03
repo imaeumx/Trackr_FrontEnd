@@ -38,7 +38,6 @@ const CustomScrollView = ({
       maxHeight: screenHeight,
       overflowY: 'auto',
       WebkitOverflowScrolling: 'touch',
-      '-webkit-overflow-scrolling': 'touch',
     },
     ios: {
       flex: 1,

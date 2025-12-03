@@ -6,12 +6,13 @@ import { globalStyles } from '../styles/globalStyles';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-const GridSection = ({ 
-  title, 
-  data, 
-  onItemPress, 
+const GridSection = ({
+  title,
+  data,
+  onItemPress,
   itemsPerRow = 9,
-  showLocalBadge = false 
+  showLocalBadge = false,
+  isLoggedIn = false
 }) => {
   if (!data || data.length === 0) {
     return (
@@ -28,6 +29,21 @@ const GridSection = ({
   const availableWidth = screenWidth - (horizontalPadding * 2);
   const cardWidth = (availableWidth - (itemSpacing * (itemsPerRow - 1))) / itemsPerRow;
 
+  // Function to handle item press with proper parameters
+  const handleItemPress = (item) => {
+    if (onItemPress) {
+      // Ensure we pass the right parameters for navigation
+      const itemData = {
+        ...item,
+        tmdbId: item.tmdb_id || item.id,
+        mediaType: item.media_type || (item.type === 'series' ? 'tv' : 'movie')
+      };
+      onItemPress(itemData);
+    }
+  };
+
+  console.log('GridSection - isLoggedIn:', isLoggedIn, 'showAddToList:', isLoggedIn);
+
   return (
     <View style={globalStyles.section}>
       <Text style={globalStyles.sectionTitle}>{title}</Text>
@@ -42,9 +58,13 @@ const GridSection = ({
             }}
           >
             <MovieCard
-              item={item}
+              item={{
+                ...item,
+                showAddToList: isLoggedIn, // Only show when logged in
+                isLoggedIn: isLoggedIn,
+              }}
               index={index}
-              onPress={() => onItemPress(item)}
+              onPress={() => handleItemPress(item)}
               itemsPerRow={itemsPerRow}
               showLocalBadge={showLocalBadge}
             />

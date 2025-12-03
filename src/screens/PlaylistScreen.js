@@ -7,7 +7,9 @@ import {
   Text,
   TouchableOpacity,
   FlatList,
-  Dimensions
+  Dimensions,
+  Modal,
+  TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
@@ -16,6 +18,7 @@ import CustomScrollView from '../components/CustomScrollView';
 import { playlistService } from '../services/playlistService';
 import { authService } from '../services/auth';
 import { globalStyles, colors } from '../styles/globalStyles';
+import { useAuth } from '../hooks/useAuth';
 
 const PlaylistScreen = ({ navigation }) => {
   const [playlists, setPlaylists] = useState([]);
@@ -27,6 +30,10 @@ const PlaylistScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [authChecked, setAuthChecked] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [playlistToDelete, setPlaylistToDelete] = useState(null);
 
   useEffect(() => {
     checkAuthStatus();
@@ -131,7 +138,7 @@ const PlaylistScreen = ({ navigation }) => {
 
       // Load playlists from API
       const playlistsData = await playlistService.getPlaylists();
-      setPlaylists(playlistsData.results || []);
+      setPlaylists(Array.isArray(playlistsData) ? playlistsData : (playlistsData.results || []));
 
     } catch (error) {
       console.error('Error loading playlists:', error);
@@ -175,7 +182,26 @@ const PlaylistScreen = ({ navigation }) => {
       navigation.navigate('Sign In');
       return;
     }
-    Alert.alert('Create Playlist', 'Create new playlist functionality');
+    // Open modal for cross-platform input
+    setNewPlaylistTitle('');
+    setCreateModalVisible(true);
+  };
+
+  const handleSubmitCreatePlaylist = async () => {
+    try {
+      if (!newPlaylistTitle || !newPlaylistTitle.trim()) {
+        Alert.alert('Error', 'Playlist title is required');
+        return;
+      }
+      const created = await playlistService.createPlaylist({ title: newPlaylistTitle.trim() });
+      Alert.alert('Success', `Playlist "${created.title}" created`);
+      setCreateModalVisible(false);
+      setNewPlaylistTitle('');
+      loadPlaylists();
+    } catch (err) {
+      console.error('Create playlist error:', err);
+      Alert.alert('Error', 'Failed to create playlist');
+    }
   };
 
   const handlePlaylistPress = (playlist) => {
@@ -184,7 +210,12 @@ const PlaylistScreen = ({ navigation }) => {
       navigation.navigate('Sign In');
       return;
     }
-    Alert.alert(playlist.title, `Viewing playlist: ${playlist.title}`);
+    
+    // Navigate to PlaylistDetail screen
+    navigation.navigate('PlaylistDetail', {
+      playlistId: playlist.id,
+      playlistTitle: playlist.title
+    });
   };
 
   const handleFeaturedPress = (item) => {
@@ -206,26 +237,95 @@ const PlaylistScreen = ({ navigation }) => {
     }
   };
 
-  const renderPlaylistItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.playlistCard}
-      onPress={() => handlePlaylistPress(item)}
-    >
-      <View style={styles.playlistIcon}>
-        <Ionicons name="list" size={24} color={colors.primary} />
+  const handleDeleteConfirm = async () => {
+    if (!playlistToDelete) return;
+
+    try {
+      console.log('=== DELETE CONFIRMED ===');
+      console.log('Deleting playlist ID:', playlistToDelete.id);
+      
+      setDeleteModalVisible(false);
+      setLoading(true);
+      
+      const result = await playlistService.deletePlaylist(playlistToDelete.id);
+      console.log('Delete API result:', result);
+      
+      console.log('Reloading playlists...');
+      await loadPlaylists();
+      console.log('Playlists reloaded successfully');
+      
+      setPlaylistToDelete(null);
+      
+    } catch (err) {
+      console.error('=== DELETE ERROR ===');
+      console.error('Error object:', err);
+      console.error('Error message:', err.message);
+      console.error('Error formatted:', err.formattedMessage);
+      
+      Alert.alert(
+        'Error',
+        err.formattedMessage || err.error || 'Failed to delete playlist. Please try again.'
+      );
+    } finally {
+      console.log('Delete operation finished, setting loading to false');
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    console.log('Delete cancelled by user');
+    setDeleteModalVisible(false);
+    setPlaylistToDelete(null);
+  };
+
+  const renderPlaylistItem = ({ item }) => {
+    const handleDeletePress = () => {
+      console.log('=== DELETE BUTTON PRESSED ===');
+      console.log('Playlist ID:', item.id);
+      console.log('Playlist Title:', item.title);
+      console.log('Is Logged In:', isLoggedIn);
+      console.log('Current User:', currentUser);
+      
+      if (!isLoggedIn) {
+        console.log('User not logged in, showing sign in alert');
+        navigation.navigate('Sign In');
+        return;
+      }
+      
+      console.log('Opening delete confirmation modal');
+      setPlaylistToDelete(item);
+      setDeleteModalVisible(true);
+    };
+
+    return (
+      <View style={styles.playlistCard}>
+        <TouchableOpacity
+          style={styles.playlistCardTouchable}
+          onPress={() => handlePlaylistPress(item)}
+        >
+          <View style={styles.playlistIcon}>
+            <Ionicons name="list" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.playlistInfo}>
+            <Text style={styles.playlistTitle}>{item.title}</Text>
+            <Text style={styles.playlistDescription}>
+              {item.description || 'No description'}
+            </Text>
+            <Text style={styles.playlistStats}>
+              {item.movie_count || 0} items
+            </Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleDeletePress}
+          style={styles.deleteButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="close-circle" size={28} color={colors.error} />
+        </TouchableOpacity>
       </View>
-      <View style={styles.playlistInfo}>
-        <Text style={styles.playlistTitle}>{item.title}</Text>
-        <Text style={styles.playlistDescription}>
-          {item.description || 'No description'}
-        </Text>
-        <Text style={styles.playlistStats}>
-          {item.item_count || 0} items
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const renderCreatePlaylistCard = () => (
     <TouchableOpacity
@@ -235,7 +335,7 @@ const PlaylistScreen = ({ navigation }) => {
       <View style={styles.createPlaylistIcon}>
         <Ionicons name="add-circle" size={32} color={colors.primary} />
       </View>
-      <Text style={styles.createPlaylistText}>Create New Playlist</Text>
+      <Text style={styles.createPlaylistText}>Create New List</Text>
     </TouchableOpacity>
   );
 
@@ -263,15 +363,15 @@ const PlaylistScreen = ({ navigation }) => {
 
   if (!authChecked || loading) {
     return (
-      <View style={globalStyles.loadingContainer}>
+      <View style={[globalStyles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={globalStyles.loadingText}>Loading...</Text>
+        <Text style={[globalStyles.loadingText, { color: colors.textSecondary }]}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <View style={globalStyles.container}>
+    <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
       <Header
         navigation={navigation}
         activeScreen="Playlist"
@@ -310,7 +410,7 @@ const PlaylistScreen = ({ navigation }) => {
                 Welcome back, {currentUser?.username}! 👋
               </Text>
               <Text style={globalStyles.welcomeSubtext}>
-                Manage your movie and series playlists
+                Manage your movie and series lists
               </Text>
             </View>
 
@@ -326,7 +426,7 @@ const PlaylistScreen = ({ navigation }) => {
 
             {/* Playlists List */}
             <View style={globalStyles.section}>
-              <Text style={globalStyles.sectionTitle}>Your Playlists ({playlists.length})</Text>
+              <Text style={globalStyles.sectionTitle}>Your Lists ({playlists.length})</Text>
               {playlists.length > 0 ? (
                 <FlatList
                   data={playlists}
@@ -337,9 +437,9 @@ const PlaylistScreen = ({ navigation }) => {
               ) : (
                 <View style={styles.emptyState}>
                   <Ionicons name="list" size={48} color={colors.textSecondary} />
-                  <Text style={styles.emptyTitle}>No playlists yet</Text>
+                  <Text style={styles.emptyTitle}>No lists yet</Text>
                   <Text style={styles.emptySubtitle}>
-                    Create your first playlist to organize your movies and series
+                    Create your first list to organize your movies and series
                   </Text>
                 </View>
               )}
@@ -350,6 +450,80 @@ const PlaylistScreen = ({ navigation }) => {
         {/* Extra space to ensure scrolling works */}
         <View style={globalStyles.bottomPadding} />
       </CustomScrollView>
+
+      {/* Create Playlist Modal */}
+      <Modal
+        visible={createModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCreateModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Create Playlist</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter playlist name"
+              placeholderTextColor={colors.textSecondary}
+              value={newPlaylistTitle}
+              onChangeText={setNewPlaylistTitle}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => {
+                  setCreateModalVisible(false);
+                  setNewPlaylistTitle('');
+                }}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleSubmitCreatePlaylist}
+              >
+                <Text style={styles.modalButtonTextConfirm}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleDeleteCancel}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons name="warning" size={48} color={colors.error} style={{ alignSelf: 'center', marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Delete Playlist</Text>
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete "{playlistToDelete?.title}"?
+            </Text>
+            <Text style={styles.deleteModalWarning}>
+              This action cannot be undone.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={handleDeleteCancel}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDelete]}
+                onPress={handleDeleteConfirm}
+              >
+                <Text style={styles.modalButtonTextDelete}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -359,10 +533,15 @@ const styles = {
   playlistCard: {
     backgroundColor: colors.card,
     marginBottom: 12,
-    padding: 16,
     borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  playlistCardTouchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
   },
   playlistIcon: {
     marginRight: 12,
@@ -384,6 +563,9 @@ const styles = {
   playlistStats: {
     fontSize: 12,
     color: colors.primary,
+  },
+  deleteButton: {
+    padding: 16,
   },
   createPlaylistCard: {
     backgroundColor: colors.card,
@@ -457,6 +639,86 @@ const styles = {
   guestButtonText: {
     color: colors.textSecondary,
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalInput: {
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalButtonConfirm: {
+    backgroundColor: colors.primary,
+  },
+  modalButtonTextCancel: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalButtonTextConfirm: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  deleteModalWarning: {
+    fontSize: 14,
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontStyle: 'italic',
+  },
+  modalButtonDelete: {
+    backgroundColor: colors.error,
+  },
+  modalButtonTextDelete: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 };
 

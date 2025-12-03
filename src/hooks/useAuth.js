@@ -42,13 +42,17 @@ export const useAuth = () => {
   }, []);
 
   const signOut = async () => {
-    // Make signOut awaitable for callers
-    try {
+    console.log('useAuth: signOut called');
+    return new Promise((resolve) => {
+      // Call authService.signOut which will notify listeners
       authService.signOut();
-      return Promise.resolve();
-    } catch (err) {
-      return Promise.reject(err);
-    }
+      console.log('useAuth: authService.signOut completed, waiting for state update...');
+      // Wait for state updates to propagate
+      setTimeout(() => {
+        console.log('useAuth: State update delay complete, resolving');
+        resolve();
+      }, 200);
+    });
   };
 
   return {

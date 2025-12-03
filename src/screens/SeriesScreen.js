@@ -210,16 +210,36 @@ const SeriesScreen = ({ navigation }) => {
   };
 
   const handleSeriesPress = (item) => {
+    console.log('Series pressed:', item);
+    
     navigation.navigate('MovieDetail', { 
-      movieId: item.id,
-      mediaType: 'tv'
+      movieId: item.tmdbId || item.id,
+      mediaType: item.mediaType || 'tv',
+      movie: {
+        id: item.tmdbId || item.id,
+        title: item.title,
+        type: item.type || 'series',
+        rating: item.rating,
+        year: item.year || item.release_year,
+        poster: item.poster || item.poster_url
+      }
     });
   };
 
   const handleFeaturedPress = (item) => {
+    console.log('Featured series pressed:', item);
+    
     navigation.navigate('MovieDetail', {
-      movieId: item.id,
-      mediaType: 'tv'
+      movieId: item.tmdbId || item.id,
+      mediaType: item.mediaType || 'tv',
+      movie: {
+        id: item.tmdbId || item.id,
+        title: item.title,
+        type: item.type || 'series',
+        rating: item.rating,
+        year: item.year || item.release_year,
+        poster: item.poster || item.poster_url
+      }
     });
   };
 
@@ -286,6 +306,7 @@ const SeriesScreen = ({ navigation }) => {
             title={`Search Results for "${searchQuery}" (${filteredSeries.length})`}
             data={filteredSeries}
             onItemPress={handleSeriesPress}
+            isLoggedIn={isLoggedIn}
           />
         ) : (
           // Regular Series Sections
@@ -295,6 +316,7 @@ const SeriesScreen = ({ navigation }) => {
               title="New Series on TrackR"
               data={newSeries}
               onItemPress={handleSeriesPress}
+              isLoggedIn={isLoggedIn}
             />
 
             {/* Popular Series on TrackR */}
@@ -302,6 +324,7 @@ const SeriesScreen = ({ navigation }) => {
               title="Popular Series on TrackR"
               data={popularSeries}
               onItemPress={handleSeriesPress}
+              isLoggedIn={isLoggedIn}
             />
 
             {/* All Series */}
@@ -309,6 +332,7 @@ const SeriesScreen = ({ navigation }) => {
               title={`All Series (${allSeries.length})`}
               data={allSeries}
               onItemPress={handleSeriesPress}
+              isLoggedIn={isLoggedIn}
             />
           </>
         )}

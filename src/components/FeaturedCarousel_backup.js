@@ -39,43 +39,39 @@ const FeaturedCarousel = ({
     return () => clearInterval(interval);
   }, [currentIndex, autoPlay, items.length, autoPlayInterval]);
 
-  // Default featured items if none provided - UPDATED with proper movie data
+  // Default featured items if none provided
   const defaultItems = [
     {
-      id: 603,
-      tmdbId: 603,
-      title: 'The Matrix',
-      description: 'Discover the reality-bending classic',
-      image: 'https://image.tmdb.org/t/p/w1280/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg',
+      id: 1,
+      title: 'New Releases',
+      description: 'Discover the latest movies and series',
+      image: 'https://image.tmdb.org/t/p/w1280/8Gxv8gSFCU0XGDykEGv7zR1n8ua.jpg',
       type: 'movie',
-      color: '#FF6B35',
-      rating: 8.7,
-      year: 1999,
-      poster: 'https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg'
+      color: '#FF6B35'
     },
     {
-      id: 157336,
-      tmdbId: 157336,
-      title: 'Interstellar',
-      description: 'A journey through space and time',
-      image: 'https://image.tmdb.org/t/p/w1280/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg',
-      type: 'movie',
-      color: '#4ECDC4',
-      rating: 8.6,
-      year: 2014,
-      poster: 'https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg'
+      id: 2,
+      title: 'Trending Now',
+      description: 'See what everyone is watching',
+      image: 'https://image.tmdb.org/t/p/w1280/jD98aUKHQZNAmrk0wQQ9wH8dYGC.jpg',
+      type: 'series',
+      color: '#00D084'
     },
     {
-      id: 155,
-      tmdbId: 155,
-      title: 'The Dark Knight',
-      description: 'When the menace known as the Joker wreaks havoc',
-      image: 'https://image.tmdb.org/t/p/w1280/qJ2tW6WMUDux911r6m7haRef0WH.jpg',
+      id: 3,
+      title: 'Staff Picks',
+      description: 'Curated by our movie experts',
+      image: 'https://image.tmdb.org/t/p/w1280/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg',
       type: 'movie',
-      color: '#2196F3',
-      rating: 9.0,
-      year: 2008,
-      poster: 'https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg'
+      color: '#9C27B0'
+    },
+    {
+      id: 4,
+      title: 'Coming Soon',
+      description: 'Upcoming releases to get excited about',
+      image: 'https://image.tmdb.org/t/p/w1280/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg',
+      type: 'movie',
+      color: '#2196F3'
     }
   ];
 
@@ -101,7 +97,7 @@ const FeaturedCarousel = ({
     <TouchableOpacity
       key={item.id || index}
       style={styles.carouselItem}
-      onPress={() => onItemPress && onItemPress({...item, tmdbId: item.tmdbId || item.id, mediaType: item.type === 'series' ? 'tv' : 'movie'})}
+      onPress={() => onItemPress && onItemPress({...item, tmdbId: item.id, mediaType: item.type === 'series' ? 'tv' : 'movie'})}
       activeOpacity={0.8}
     >
       <Image
@@ -206,13 +202,14 @@ const styles = StyleSheet.create({
   },
   indicators: {
     flexDirection: 'row',
-    gap: 6,
+    alignItems: 'center',
   },
   indicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.border,
+    backgroundColor: colors.textSecondary,
+    marginHorizontal: 4,
   },
   activeIndicator: {
     backgroundColor: colors.primary,
@@ -222,8 +219,11 @@ const styles = StyleSheet.create({
     height: CAROUSEL_HEIGHT,
   },
   carouselItem: {
-    width: screenWidth,
+    width: screenWidth - 32,
     height: CAROUSEL_HEIGHT,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
     position: 'relative',
   },
   carouselImage: {
@@ -232,26 +232,25 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   itemContent: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
+    bottom: 20,
+    left: 20,
+    right: 20,
   },
   typeBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
     marginBottom: 8,
   },
   typeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   itemTitle: {
     fontSize: 24,
@@ -261,9 +260,8 @@ const styles = StyleSheet.create({
   },
   itemDescription: {
     fontSize: 14,
-    color: '#FFFFFF',
+    color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: 12,
-    opacity: 0.9,
   },
   ctaButton: {
     flexDirection: 'row',
@@ -273,19 +271,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+    backdropFilter: 'blur(10px)',
   },
   ctaText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
-    marginRight: 6,
+    marginRight: 8,
   },
   navigation: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
     marginTop: 12,
+    paddingHorizontal: 16,
   },
   navButton: {
     width: 40,
@@ -294,6 +293,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
+    marginHorizontal: 8,
   },
 });
 

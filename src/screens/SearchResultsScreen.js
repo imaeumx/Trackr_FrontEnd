@@ -17,13 +17,18 @@ const SearchResultsScreen = ({ route, navigation }) => {
     <TouchableOpacity 
       style={styles.resultItem}
       onPress={() => navigation.navigate('MovieDetail', { 
+        movieId: item.id,
+        mediaType: item.media_type === 'movie' ? 'movie' : 'tv',
+        tmdbId: item.id,
         movie: {
           id: item.id,
           title: item.title || item.name,
           type: item.media_type === 'movie' ? 'movie' : 'series',
-          rating: item.vote_average ? (item.vote_average / 2).toFixed(1) : 'N/A'
-        },
-        tmdbId: item.id 
+          rating: item.vote_average ? (item.vote_average / 2).toFixed(1) : 'N/A',
+          year: item.release_date ? new Date(item.release_date).getFullYear() : item.first_air_date ? new Date(item.first_air_date).getFullYear() : 'N/A',
+          poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
+          description: item.overview
+        }
       })}
     >
       <View style={styles.posterContainer}>
@@ -64,7 +69,7 @@ const SearchResultsScreen = ({ route, navigation }) => {
   );
 
   return (
-    <View style={globalStyles.container}>
+    <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <Text style={styles.resultsTitle}>
           Search Results for "{query}"

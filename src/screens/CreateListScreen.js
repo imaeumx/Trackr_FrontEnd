@@ -26,7 +26,7 @@ const CreateListScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={globalStyles.container}>
+    <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={{ flex: 1 }}>
         <View style={styles.formContainer}>
           <Text style={styles.title}>Create New List</Text>

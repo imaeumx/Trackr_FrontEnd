@@ -1,9 +1,8 @@
-// App.js - UPDATED WITH AUTH INITIALIZATION
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
-import {  } from 'react-native';
+import { View } from 'react-native';
 // Loading UI
 import LoadingScreen from './src/components/LoadingScreen';
 
@@ -12,10 +11,12 @@ import HomeScreen from './src/screens/HomeScreen';
 import FilmsScreen from './src/screens/FilmsScreen';
 import SeriesScreen from './src/screens/SeriesScreen';
 import PlaylistScreen from './src/screens/PlaylistScreen';
+import PlaylistDetailScreen from './src/screens/PlaylistDetailScreen';
 import SignInScreen from './src/screens/SignInScreen';
 import MovieDetailScreen from './src/screens/MovieDetailScreen';
 import SearchResultsScreen from './src/screens/SearchResultsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import HelpSupportScreen from './src/screens/HelpSupportScreen';
 import CreateListScreen from './src/screens/CreateListScreen';
 import MyListsScreen from './src/screens/MyListsScreen';
 
@@ -86,10 +87,12 @@ const App = () => {
         <Stack.Screen name="Films" component={FilmsScreen} />
         <Stack.Screen name="Series" component={SeriesScreen} />
         <Stack.Screen name="Playlist" component={PlaylistScreen} />
+        <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
         <Stack.Screen name="Sign In" component={SignInScreen} />
         <Stack.Screen name="MovieDetail" component={MovieDetailScreen} />
         <Stack.Screen name="SearchResults" component={SearchResultsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
         <Stack.Screen name="CreateList" component={CreateListScreen} />
         <Stack.Screen name="MyLists" component={MyListsScreen} />
       </Stack.Navigator>

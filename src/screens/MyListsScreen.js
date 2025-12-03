@@ -53,7 +53,7 @@ const MyListsScreen = ({ navigation }) => {
   );
 
   return (
-    <View style={globalStyles.container}>
+    <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <Text style={globalStyles.logo}>TrackR</Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>

@@ -235,16 +235,36 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleItemPress = (item) => {
+    console.log('Item pressed:', item);
+    
     navigation.navigate('MovieDetail', { 
-      movieId: item.id,
-      mediaType: item.type === 'series' ? 'tv' : 'movie'
+      movieId: item.tmdbId || item.id,
+      mediaType: item.mediaType || (item.type === 'series' ? 'tv' : 'movie'),
+      movie: {
+        id: item.tmdbId || item.id,
+        title: item.title,
+        type: item.type || item.media_type || 'movie',
+        rating: item.rating,
+        year: item.year || item.release_year,
+        poster: item.poster || item.poster_url
+      }
     });
   };
 
   const handleFeaturedPress = (item) => {
+    console.log('Featured item pressed:', item);
+    
     navigation.navigate('MovieDetail', {
-      movieId: item.id,
-      mediaType: item.type === 'series' ? 'tv' : 'movie'
+      movieId: item.tmdbId || item.id,
+      mediaType: item.mediaType || (item.type === 'series' ? 'tv' : 'movie'),
+      movie: {
+        id: item.tmdbId || item.id,
+        title: item.title,
+        type: item.type || item.media_type || 'movie',
+        rating: item.rating,
+        year: item.year || item.release_year,
+        poster: item.poster || item.poster_url
+      }
     });
   };
 
@@ -311,6 +331,7 @@ const HomeScreen = ({ navigation }) => {
           title="New on TrackR"
           data={newReleases}
           onItemPress={handleItemPress}
+          isLoggedIn={isLoggedIn}
         />
 
         {/* Popular on TrackR */}
@@ -318,6 +339,7 @@ const HomeScreen = ({ navigation }) => {
           title="Popular on TrackR"
           data={popular}
           onItemPress={handleItemPress}
+          isLoggedIn={isLoggedIn}
         />
 
         {/* Extra space to ensure scrolling works */}

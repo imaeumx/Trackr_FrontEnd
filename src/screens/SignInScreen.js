@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  Platform
 } from 'react-native';
 import { authService } from '../services/auth';
 import { globalStyles, colors } from '../styles/globalStyles';
@@ -15,6 +17,7 @@ import { globalStyles, colors } from '../styles/globalStyles';
 const SignInScreen = ({ navigation }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorModal, setErrorModal] = useState(null);
 
   // Sign In State
   const [username, setUsername] = useState('');
@@ -26,9 +29,23 @@ const SignInScreen = ({ navigation }) => {
   const [signUpPassword, setSignUpPassword] = useState('');
   const [retypePassword, setRetypePassword] = useState('');
 
+  const showError = (title, message, buttons = null) => {
+    if (Platform.OS === 'web') {
+      // On web, use custom modal since Alert.alert doesn't work reliably
+      setErrorModal({
+        title,
+        message,
+        buttons: buttons || [{ text: 'OK', onPress: () => setErrorModal(null) }]
+      });
+    } else {
+      // On native, use Alert.alert
+      Alert.alert(title, message, buttons || [{ text: 'OK' }]);
+    }
+  };
+
   const handleSignIn = async () => {
     if (!username || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showError('Error', 'Please fill in all fields');
       return;
     }
 
@@ -39,34 +56,79 @@ const SignInScreen = ({ navigation }) => {
       console.log('Sign in successful:', result);
 
       // Show success alert with auto-dismiss
-      Alert.alert('Success', `Welcome back to TrackR, ${username}! 🎉`);
-
-      // Navigate after a short delay to let user see the success message
-      setTimeout(() => {
-        navigation.replace('Playlist');
-      }, 1500);
+      showError('Success', `Welcome back to TrackR, ${username}! 🎉`, [
+        { text: 'OK', onPress: () => {
+          setErrorModal(null);
+          setTimeout(() => {
+            navigation.replace('Playlist');
+          }, 500);
+        }}
+      ]);
 
     } catch (error) {
       console.error('Sign in error details:', error);
+      console.error('Error type:', typeof error);
+      console.error('Error status:', error.response?.status);
+      console.error('Error is string?', typeof error === 'string');
 
       let errorTitle = 'Login Failed';
       let errorMessage = '';
-      let buttons = [{ text: 'OK' }];
+      let buttons = [{ text: 'OK', onPress: () => setErrorModal(null) }];
 
       // Parse the error to get meaningful messages
-      if (error.response?.status === 404) {
+      if (typeof error === 'string') {
+        // Handle string errors thrown from auth service
+        if (error.includes('does not exist') || error.includes('User does not exist')) {
+          errorTitle = 'User Not Found';
+          errorMessage = `The username "${username}" doesn't exist.\n\nWould you like to create an account?`;
+          buttons = [
+            {
+              text: 'Create Account',
+              onPress: () => {
+                setErrorModal(null);
+                setIsSignUp(true);
+                setSignUpUsername(username);
+                setPassword('');
+              }
+            },
+            { text: 'Try Again', onPress: () => setErrorModal(null) }
+          ];
+        } else if (error.includes('Invalid') || error.includes('password')) {
+          errorTitle = 'Wrong Password';
+          errorMessage = 'The password you entered is incorrect.';
+          buttons = [
+            {
+              text: 'Try Again',
+              onPress: () => {
+                setErrorModal(null);
+                setPassword('');
+              }
+            },
+            {
+              text: 'Forgot Password?',
+              onPress: () => {
+                setErrorModal(null);
+                showError('Forgot Password', 'Please contact support to reset your password.');
+              }
+            }
+          ];
+        } else {
+          errorMessage = error;
+        }
+      } else if (error.response?.status === 404) {
         errorTitle = 'User Not Found';
         errorMessage = `The username "${username}" doesn't exist.\n\nWould you like to create an account?`;
         buttons = [
           {
             text: 'Create Account',
             onPress: () => {
+              setErrorModal(null);
               setIsSignUp(true);
               setSignUpUsername(username);
               setPassword('');
             }
           },
-          { text: 'Try Again', style: 'cancel' }
+          { text: 'Try Again', onPress: () => setErrorModal(null) }
         ];
       } else if (error.response?.status === 401) {
         errorTitle = 'Wrong Password';
@@ -75,14 +137,15 @@ const SignInScreen = ({ navigation }) => {
           {
             text: 'Try Again',
             onPress: () => {
+              setErrorModal(null);
               setPassword('');
             }
           },
           {
             text: 'Forgot Password?',
-            style: 'destructive',
             onPress: () => {
-              Alert.alert('Forgot Password', 'Please contact support to reset your password.');
+              setErrorModal(null);
+              showError('Forgot Password', 'Please contact support to reset your password.');
             }
           }
         ];
@@ -92,15 +155,14 @@ const SignInScreen = ({ navigation }) => {
       } else if (error.code === 'ECONNABORTED') {
         errorTitle = 'Timeout';
         errorMessage = 'Server is taking too long to respond.\n\nPlease check if the backend server is running.';
-      } else if (typeof error === 'string') {
-        errorMessage = error;
       } else if (error.formattedMessage) {
         errorMessage = error.formattedMessage;
       } else {
         errorMessage = 'An unexpected error occurred. Please try again.';
       }
 
-      Alert.alert(errorTitle, errorMessage, buttons);
+      console.log('Showing alert:', errorTitle, errorMessage);
+      showError(errorTitle, errorMessage, buttons);
 
     } finally {
       setLoading(false);
@@ -228,7 +290,7 @@ const SignInScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={globalStyles.container}>
+    <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
       <ScrollView style={{ flex: 1 }}>
         <View style={styles.formContainer}>
           <Text style={styles.title}>TrackR</Text>
@@ -406,6 +468,43 @@ const SignInScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Error Modal for Web */}
+      {errorModal && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setErrorModal(null)}
+        >
+          <View style={styles.errorModalOverlay}>
+            <View style={styles.errorModalContent}>
+              <Text style={styles.errorModalTitle}>{errorModal.title}</Text>
+              <Text style={styles.errorModalMessage}>{errorModal.message}</Text>
+              
+              <View style={styles.errorModalButtons}>
+                {errorModal.buttons.map((button, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.errorModalButton,
+                      index === errorModal.buttons.length - 1 ? styles.errorModalButtonPrimary : styles.errorModalButtonSecondary
+                    ]}
+                    onPress={button.onPress}
+                  >
+                    <Text style={[
+                      styles.errorModalButtonText,
+                      index === errorModal.buttons.length - 1 && styles.errorModalButtonTextPrimary
+                    ]}>
+                      {button.text}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -489,6 +588,63 @@ const styles = {
   guestButtonText: {
     color: colors.textSecondary,
     fontSize: 14,
+  },
+  errorModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorModalContent: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  errorModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  errorModalMessage: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  errorModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  errorModalButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  errorModalButtonSecondary: {
+    backgroundColor: colors.border,
+  },
+  errorModalButtonPrimary: {
+    backgroundColor: colors.primary,
+  },
+  errorModalButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  errorModalButtonTextPrimary: {
+    color: '#FFFFFF',
   },
 };
 
