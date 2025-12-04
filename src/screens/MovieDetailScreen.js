@@ -10,7 +10,9 @@ import {
   Image,
   ScrollView,
   Modal,
-  FlatList
+  FlatList,
+  TextInput,
+  StyleSheet
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
@@ -29,7 +31,12 @@ const MovieDetailScreen = ({ route, navigation }) => {
   const [watchStatus, setWatchStatus] = useState('');
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [playlists, setPlaylists] = useState([]);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [newPlaylistDescription, setNewPlaylistDescription] = useState('');
+  const [showCreatePlaylistInput, setShowCreatePlaylistInput] = useState(false);
   const [loadingPlaylists, setLoadingPlaylists] = useState(false);
+  const [trailerUrl, setTrailerUrl] = useState(null);
+  const [loadingTrailer, setLoadingTrailer] = useState(false);
   
   const { isLoggedIn } = useAuth();
 
@@ -113,6 +120,38 @@ const MovieDetailScreen = ({ route, navigation }) => {
     loadMovieDetails();
   }, [movieParam, movieId, mediaType, tmdbId]);
 
+  // Fetch trailer after movie details are loaded
+  useEffect(() => {
+    if (!movieDetails) return;
+
+    const fetchTrailer = async () => {
+      setLoadingTrailer(true);
+      try {
+        const tmdb = tmdbId || movieId || movieParam?.id || movieDetails?.id;
+        const type = mediaType || movieParam?.type || movieDetails?.type || 'movie';
+        
+        if (!tmdb) return;
+
+        let url;
+        if (type === 'tv' || type === 'series') {
+          url = await movieService.getTVTrailers(tmdb);
+        } else {
+          url = await movieService.getMovieTrailers(tmdb);
+        }
+
+        if (url) {
+          setTrailerUrl(url);
+        }
+      } catch (error) {
+        console.log('Failed to fetch trailer:', error);
+      } finally {
+        setLoadingTrailer(false);
+      }
+    };
+
+    fetchTrailer();
+  }, [movieDetails]);
+
   const handleAddToList = async () => {
     // Check if user is logged in
     if (!isLoggedIn) {
@@ -140,21 +179,7 @@ const MovieDetailScreen = ({ route, navigation }) => {
         ? playlistsResponse 
         : (playlistsResponse.results || []);
       
-      if (userPlaylists.length === 0) {
-        Alert.alert(
-          'No Playlists',
-          'You don\'t have any playlists yet. Create one first!',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Create Playlist', 
-              onPress: () => navigation.navigate('Playlists')
-            }
-          ]
-        );
-        return;
-      }
-      
+      // Show modal even if no playlists - user can create one
       setPlaylists(userPlaylists);
       setShowPlaylistModal(true);
     } catch (error) {
@@ -205,6 +230,39 @@ const MovieDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleCreateNewPlaylist = async () => {
+    if (!newPlaylistName.trim()) {
+      Alert.alert('Error', 'Please enter a playlist name');
+      return;
+    }
+
+    try {
+      setLoadingPlaylists(true);
+      const newPlaylist = await playlistService.createPlaylist({
+        title: newPlaylistName.trim(),
+        description: newPlaylistDescription.trim()
+      });
+
+      if (movieDetails) {
+        const tmdbId = movieDetails.id || movieDetails.tmdb_id;
+        const mediaType = movieDetails.type === 'series' ? 'tv' : 'movie';
+        const createdMovie = await movieService.getOrCreateMovie(tmdbId, mediaType);
+        await playlistService.addMovieToPlaylist(newPlaylist.id, createdMovie.id, 'to_watch');
+      }
+
+      Alert.alert('Success', `Created playlist "${newPlaylistName}" and added movie!`);
+      setShowCreatePlaylistInput(false);
+      setNewPlaylistName('');
+      setNewPlaylistDescription('');
+      setShowPlaylistModal(false);
+    } catch (error) {
+      console.error('Error creating playlist:', error);
+      Alert.alert('Error', 'Failed to create playlist. Please try again.');
+    } finally {
+      setLoadingPlaylists(false);
+    }
+  };
+
   const handleRate = (rating) => {
     setUserRating(rating);
     Alert.alert('Rating Added', `You rated this ${rating} stars`);
@@ -213,22 +271,6 @@ const MovieDetailScreen = ({ route, navigation }) => {
   const handleSetStatus = (status) => {
     setWatchStatus(status);
     Alert.alert('Status Updated', `Marked as ${status}`);
-  };
-
-  const renderStars = () => {
-    return (
-      <View style={styles.starsContainer}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <TouchableOpacity key={star} onPress={() => handleRate(star)}>
-            <Ionicons
-              name={star <= userRating ? "star" : "star-outline"}
-              size={32}
-              color={colors.warning}
-            />
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
   };
 
   const formatRuntime = (minutes) => {
@@ -289,8 +331,31 @@ const MovieDetailScreen = ({ route, navigation }) => {
       </View>
 
       <CustomScrollView style={{ flex: 1 }} contentContainerStyle={{ minHeight: Dimensions.get('window').height, paddingTop: 130 }}>
-        {/* Backdrop Image */}
-        {movieDetails.backdrop_path ? (
+        {/* Backdrop Image or Trailer Video */}
+        {trailerUrl ? (
+          <View style={styles.backdropVideo}>
+            {typeof document !== 'undefined' && (
+              <iframe
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                }}
+                src={`${trailerUrl}?autoplay=1&mute=1&controls=1`}
+                allowFullScreen
+                allow="autoplay; encrypted-media"
+              />
+            )}
+            {loadingTrailer && (
+              <View style={styles.trailerLoadingOverlay}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
+            )}
+          </View>
+        ) : movieDetails.backdrop_path ? (
           <Image
             source={{ uri: movieDetails.backdrop_path }}
             style={styles.backdropImage}
@@ -328,14 +393,6 @@ const MovieDetailScreen = ({ route, navigation }) => {
             <Text style={styles.title}>{movieDetails.title}</Text>
             <Text style={styles.tagline}>{movieDetails.tagline}</Text>
             
-            {isLoggedIn && (
-              <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={16} color={colors.warning} />
-                <Text style={styles.ratingText}>{movieDetails.rating}/5</Text>
-                <Text style={styles.voteCount}>({movieDetails.vote_count} votes)</Text>
-              </View>
-            )}
-            
             <Text style={styles.type}>{movieDetails.type.toUpperCase()}</Text>
             <Text style={styles.year}>{movieDetails.year}</Text>
           </View>
@@ -344,8 +401,6 @@ const MovieDetailScreen = ({ route, navigation }) => {
         {/* Action Buttons - Only for logged in users */}
         {isLoggedIn && (
           <View style={styles.actions}>
-            {renderStars()}
-            
             <View style={styles.statusButtons}>
               <TouchableOpacity 
                 style={[styles.statusButton, watchStatus === 'Watched' && styles.statusActive]}
@@ -466,18 +521,85 @@ const MovieDetailScreen = ({ route, navigation }) => {
       <Modal
         visible={showPlaylistModal}
         transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowPlaylistModal(false)}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPlaylistModal(false);
+          setShowCreatePlaylistInput(false);
+          setNewPlaylistName('');
+          setNewPlaylistDescription('');
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Playlist</Text>
-              <TouchableOpacity onPress={() => setShowPlaylistModal(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowPlaylistModal(false);
+                setShowCreatePlaylistInput(false);
+                setNewPlaylistName('');
+                setNewPlaylistDescription('');
+              }}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
-            
+
+            <View style={styles.createPlaylistSection}>
+              {!showCreatePlaylistInput ? (
+                <TouchableOpacity
+                  style={styles.createPlaylistButton}
+                  onPress={() => setShowCreatePlaylistInput(true)}
+                >
+                  <Ionicons name="add-circle" size={20} color={colors.primary} />
+                  <Text style={styles.createPlaylistButtonText}>Create New Playlist</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.createPlaylistInputContainer}>
+                  <TextInput
+                    style={styles.createPlaylistInput}
+                    placeholder="Enter playlist name"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newPlaylistName}
+                    onChangeText={setNewPlaylistName}
+                    autoFocus
+                  />
+                  <TextInput
+                    style={[styles.createPlaylistInput, { height: 80, marginTop: 12 }]}
+                    placeholder="Enter description (optional)"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newPlaylistDescription}
+                    onChangeText={setNewPlaylistDescription}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                  />
+                  <View style={styles.createPlaylistActions}>
+                    <TouchableOpacity
+                      style={styles.createCancelButton}
+                      onPress={() => {
+                        setShowCreatePlaylistInput(false);
+                        setNewPlaylistName('');
+                        setNewPlaylistDescription('');
+                      }}
+                    >
+                      <Text style={styles.createCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.createConfirmButton,
+                        !newPlaylistName.trim() && styles.createConfirmButtonDisabled
+                      ]}
+                      onPress={handleCreateNewPlaylist}
+                      disabled={!newPlaylistName.trim() || loadingPlaylists}
+                    >
+                      <Text style={styles.createConfirmText}>Create</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.modalSubtitle}>Or select existing playlist:</Text>
+
             {loadingPlaylists ? (
               <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />
             ) : (
@@ -495,13 +617,18 @@ const MovieDetailScreen = ({ route, navigation }) => {
                       {item.description && (
                         <Text style={styles.playlistDescription}>{item.description}</Text>
                       )}
+                      <Text style={styles.playlistStats}>{item.movie_count || 0} items</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={() => (
-                  <Text style={styles.emptyText}>No playlists found</Text>
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No playlists found</Text>
+                    <Text style={styles.emptySubtext}>Create your first playlist using the option above!</Text>
+                  </View>
                 )}
+                style={styles.playlistList}
               />
             )}
           </View>
@@ -546,11 +673,23 @@ const styles = {
   },
   backdropImage: {
     width: '100%',
-    height: 250,
+    height: 400,
+  },
+  backdropVideo: {
+    width: '100%',
+    height: 400,
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  trailerLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   backdropPlaceholder: {
     width: '100%',
-    height: 250,
+    height: 400,
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
@@ -765,14 +904,17 @@ const styles = {
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   modalContent: {
     backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderRadius: 16,
     paddingBottom: 40,
-    maxHeight: '70%',
+    maxHeight: '80%',
+    width: '100%',
+    maxWidth: 400,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -808,11 +950,105 @@ const styles = {
     fontSize: 14,
     color: colors.textSecondary,
   },
+  playlistStats: {
+    fontSize: 12,
+    color: colors.text,
+    fontWeight: '500',
+  },
   emptyText: {
     textAlign: 'center',
     color: colors.textSecondary,
     padding: 20,
     fontSize: 16,
+  },
+  createPlaylistSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  createPlaylistButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+  },
+  createPlaylistButtonText: {
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  createPlaylistInputContainer: {
+    backgroundColor: colors.background,
+    padding: 16,
+    borderRadius: 8,
+  },
+  createPlaylistInput: {
+    backgroundColor: colors.card,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.text,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  createPlaylistActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  createCancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  createCancelText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  createConfirmButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
+  },
+  createConfirmButtonDisabled: {
+    backgroundColor: colors.textSecondary,
+  },
+  createConfirmText: {
+    color: colors.background,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalSubtitle: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.textSecondary,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  playlistList: {
+    maxHeight: 300,
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 };
 

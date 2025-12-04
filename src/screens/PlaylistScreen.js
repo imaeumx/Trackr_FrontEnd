@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import FeaturedCarousel from '../components/FeaturedCarousel'; // Add this import
 import CustomScrollView from '../components/CustomScrollView';
+import Toast from '../components/Toast';
 import { playlistService } from '../services/playlistService';
 import { authService } from '../services/auth';
 import { globalStyles, colors } from '../styles/globalStyles';
@@ -32,8 +33,13 @@ const PlaylistScreen = ({ navigation }) => {
   const [authChecked, setAuthChecked] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
+  const [newPlaylistDescription, setNewPlaylistDescription] = useState('');
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [playlistToDelete, setPlaylistToDelete] = useState(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedPlaylists, setSelectedPlaylists] = useState([]);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   useEffect(() => {
     checkAuthStatus();
@@ -184,6 +190,7 @@ const PlaylistScreen = ({ navigation }) => {
     }
     // Open modal for cross-platform input
     setNewPlaylistTitle('');
+    setNewPlaylistDescription('');
     setCreateModalVisible(true);
   };
 
@@ -193,10 +200,14 @@ const PlaylistScreen = ({ navigation }) => {
         Alert.alert('Error', 'Playlist title is required');
         return;
       }
-      const created = await playlistService.createPlaylist({ title: newPlaylistTitle.trim() });
+      const created = await playlistService.createPlaylist({ 
+        title: newPlaylistTitle.trim(),
+        description: newPlaylistDescription.trim()
+      });
       Alert.alert('Success', `Playlist "${created.title}" created`);
       setCreateModalVisible(false);
       setNewPlaylistTitle('');
+      setNewPlaylistDescription('');
       loadPlaylists();
     } catch (err) {
       console.error('Create playlist error:', err);
@@ -211,11 +222,82 @@ const PlaylistScreen = ({ navigation }) => {
       return;
     }
     
-    // Navigate to PlaylistDetail screen
-    navigation.navigate('PlaylistDetail', {
-      playlistId: playlist.id,
-      playlistTitle: playlist.title
-    });
+    if (selectionMode) {
+      togglePlaylistSelection(playlist.id);
+    } else {
+      // Navigate to PlaylistDetail screen
+      navigation.navigate('PlaylistDetail', {
+        playlistId: playlist.id,
+        playlistTitle: playlist.title
+      });
+    }
+  };
+
+  const togglePlaylistSelection = (playlistId) => {
+    if (selectedPlaylists.includes(playlistId)) {
+      setSelectedPlaylists(selectedPlaylists.filter(id => id !== playlistId));
+    } else {
+      setSelectedPlaylists([...selectedPlaylists, playlistId]);
+    }
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedPlaylists([]);
+  };
+
+  const selectAll = () => {
+    if (selectedPlaylists.length === playlists.length) {
+      setSelectedPlaylists([]);
+    } else {
+      setSelectedPlaylists(playlists.map(list => list.id));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    setShowBulkDeleteConfirm(true);
+  };
+
+  const confirmBulkDeleteAction = async () => {
+    const count = selectedPlaylists.length;
+    try {
+      setShowBulkDeleteConfirm(false);
+      setLoading(true);
+      
+      // Perform bulk delete
+      await Promise.all(
+        selectedPlaylists.map(playlistId =>
+          playlistService.deletePlaylist(playlistId)
+        )
+      );
+      
+      setSelectedPlaylists([]);
+      setSelectionMode(false);
+      loadPlaylists();
+      
+      setToast({
+        visible: true,
+        message: `${count} ${count === 1 ? 'list' : 'lists'} deleted successfully`,
+        type: 'success'
+      });
+    } catch (error) {
+      console.error('Error bulk deleting playlists:', error);
+      setToast({
+        visible: true,
+        message: 'Failed to delete playlists',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteButtonPress = () => {
+    if (selectionMode && selectedPlaylists.length > 0) {
+      handleBulkDelete();
+    } else {
+      toggleSelectionMode();
+    }
   };
 
   const handleFeaturedPress = (item) => {
@@ -279,6 +361,8 @@ const PlaylistScreen = ({ navigation }) => {
   };
 
   const renderPlaylistItem = ({ item }) => {
+    const isSelected = selectedPlaylists.includes(item.id);
+    
     const handleDeletePress = () => {
       console.log('=== DELETE BUTTON PRESSED ===');
       console.log('Playlist ID:', item.id);
@@ -298,10 +382,28 @@ const PlaylistScreen = ({ navigation }) => {
     };
 
     return (
-      <View style={styles.playlistCard}>
+      <View style={[
+        styles.playlistCard,
+        isSelected && { borderLeftWidth: 4, borderLeftColor: colors.primary }
+      ]}>
+        {selectionMode && (
+          <View style={styles.checkbox}>
+            <Ionicons 
+              name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
+              size={24} 
+              color={isSelected ? colors.primary : colors.textSecondary} 
+            />
+          </View>
+        )}
         <TouchableOpacity
           style={styles.playlistCardTouchable}
           onPress={() => handlePlaylistPress(item)}
+          onLongPress={() => {
+            if (!selectionMode) {
+              setSelectionMode(true);
+              togglePlaylistSelection(item.id);
+            }
+          }}
         >
           <View style={styles.playlistIcon}>
             <Ionicons name="list" size={24} color={colors.primary} />
@@ -316,13 +418,6 @@ const PlaylistScreen = ({ navigation }) => {
             </Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleDeletePress}
-          style={styles.deleteButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="close-circle" size={28} color={colors.error} />
-        </TouchableOpacity>
       </View>
     );
   };
@@ -332,10 +427,30 @@ const PlaylistScreen = ({ navigation }) => {
       style={styles.createPlaylistCard}
       onPress={handleCreatePlaylist}
     >
-      <View style={styles.createPlaylistIcon}>
-        <Ionicons name="add-circle" size={32} color={colors.primary} />
-      </View>
+      <Ionicons name="add-circle" size={32} color={colors.primary} />
       <Text style={styles.createPlaylistText}>Create New List</Text>
+    </TouchableOpacity>
+  );
+
+  const renderDeletePlaylistButton = () => (
+    <TouchableOpacity 
+      style={[
+        styles.deletePlaylistCard,
+        selectionMode && selectedPlaylists.length > 0 && { backgroundColor: colors.error }
+      ]}
+      onPress={handleDeleteButtonPress}
+    >
+      <Ionicons 
+        name="trash" 
+        size={32} 
+        color={selectionMode && selectedPlaylists.length > 0 ? "#FFFFFF" : colors.error} 
+      />
+      <Text style={[
+        styles.deletePlaylistText, 
+        { color: selectionMode && selectedPlaylists.length > 0 ? "#FFFFFF" : colors.error }
+      ]}>
+        {selectionMode && selectedPlaylists.length > 0 ? `Delete (${selectedPlaylists.length})` : 'Select to Delete'}
+      </Text>
     </TouchableOpacity>
   );
 
@@ -403,30 +518,36 @@ const PlaylistScreen = ({ navigation }) => {
                 <Text style={globalStyles.errorText}>{error}</Text>
               </View>
             )}
-
-            {/* Welcome Message */}
-            <View style={globalStyles.welcomeContainer}>
-              <Text style={globalStyles.welcomeText}>
-                Welcome back, {currentUser?.username}! 👋
-              </Text>
-              <Text style={globalStyles.welcomeSubtext}>
-                Manage your movie and series lists
-              </Text>
+            
+            {/* Selection Mode and Create Playlist Card */}
+            <View style={styles.playlistControlsContainer}>
+              {renderCreatePlaylistCard()}
+              {renderDeletePlaylistButton()}
             </View>
-
-            {/* Featured Playlists Carousel */}
-            <FeaturedCarousel
-              title="Featured Collections"
-              items={featuredPlaylists}
-              onItemPress={handleFeaturedPress}
-              autoPlay={true}
-            />
-            {/* Create Playlist Card */}
-            {renderCreatePlaylistCard()}
 
             {/* Playlists List */}
             <View style={globalStyles.section}>
-              <Text style={globalStyles.sectionTitle}>Your Lists ({playlists.length})</Text>
+              <View style={styles.listHeaderContainer}>
+                <Text style={globalStyles.sectionTitle}>Your Lists ({playlists.length})</Text>
+                {playlists.length > 0 && (
+                  <View style={styles.selectionControls}>
+                    <TouchableOpacity onPress={toggleSelectionMode}>
+                      <Ionicons 
+                        name={selectionMode ? "close-circle" : "checkmark-circle-outline"} 
+                        size={24} 
+                        color={colors.text} 
+                      />
+                    </TouchableOpacity>
+                    {selectionMode && (
+                      <TouchableOpacity onPress={selectAll}>
+                        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>
+                          {selectedPlaylists.length === playlists.length ? 'Deselect All' : 'Select All'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+              </View>
               {playlists.length > 0 ? (
                 <FlatList
                   data={playlists}
@@ -469,12 +590,23 @@ const PlaylistScreen = ({ navigation }) => {
               onChangeText={setNewPlaylistTitle}
               autoFocus
             />
+            <TextInput
+              style={[styles.modalInput, { height: 80, marginTop: 12 }]}
+              placeholder="Enter description (optional)"
+              placeholderTextColor={colors.textSecondary}
+              value={newPlaylistDescription}
+              onChangeText={setNewPlaylistDescription}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={() => {
                   setCreateModalVisible(false);
                   setNewPlaylistTitle('');
+                  setNewPlaylistDescription('');
                 }}
               >
                 <Text style={styles.modalButtonTextCancel}>Cancel</Text>
@@ -524,6 +656,54 @@ const PlaylistScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <Modal
+        visible={showBulkDeleteConfirm}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowBulkDeleteConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons 
+              name="warning" 
+              size={48} 
+              color={colors.error} 
+              style={{ alignSelf: 'center', marginBottom: 16 }} 
+            />
+            <Text style={styles.modalTitle}>Delete Playlists</Text>
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete {selectedPlaylists.length} {selectedPlaylists.length === 1 ? 'playlist' : 'playlists'}?
+            </Text>
+            <Text style={styles.deleteModalWarning}>
+              This action cannot be undone.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowBulkDeleteConfirm(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDelete]}
+                onPress={confirmBulkDeleteAction}
+              >
+                <Text style={styles.modalButtonTextDelete}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Toast Notification */}
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
     </View>
   );
 };
@@ -562,20 +742,11 @@ const styles = {
   },
   playlistStats: {
     fontSize: 12,
-    color: colors.primary,
+    color: colors.text,
+    fontWeight: '500',
   },
   deleteButton: {
     padding: 16,
-  },
-  createPlaylistCard: {
-    backgroundColor: colors.card,
-    margin: 16,
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
   },
   createPlaylistIcon: {
     marginBottom: 8,
@@ -719,6 +890,78 @@ const styles = {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  playlistControlsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginVertical: 16,
+    paddingHorizontal: 16,
+  },
+  createPlaylistCard: {
+    backgroundColor: colors.card,
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    flex: 1,
+    minHeight: 120,
+  },
+  createPlaylistIcon: {
+    marginBottom: 8,
+  },
+  createPlaylistText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  deletePlaylistCard: {
+    backgroundColor: colors.card,
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.error,
+    borderStyle: 'dashed',
+    flex: 1,
+    minHeight: 120,
+  },
+  deletePlaylistText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  listHeaderContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  selectionControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  checkbox: {
+    marginRight: 12,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: colors.error,
+    borderRadius: 8,
+    flex: 1,
+  },
+  deleteButtonText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 };
 

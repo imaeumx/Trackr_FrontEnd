@@ -1,5 +1,5 @@
-// src/screens/CreateListScreen.js
-import React, { useState } from 'react';
+// src/screens/EditPlaylistScreen.js
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,34 +13,66 @@ import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
 import { playlistService } from '../services/playlistService';
 
-const CreateListScreen = ({ navigation }) => {
-  const [listName, setListName] = useState('');
-  const [listDescription, setListDescription] = useState('');
-  const [creating, setCreating] = useState(false);
+const EditPlaylistScreen = ({ route, navigation }) => {
+  const { playlistId, playlistTitle: initialTitle, playlistDescription: initialDescription } = route?.params || {};
+  
+  const [listName, setListName] = useState(initialTitle || '');
+  const [listDescription, setListDescription] = useState(initialDescription || '');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleCreateList = async () => {
+  useEffect(() => {
+    if (playlistId && !initialTitle) {
+      loadPlaylistDetails();
+    }
+  }, [playlistId]);
+
+  const loadPlaylistDetails = async () => {
+    try {
+      setLoading(true);
+      const playlist = await playlistService.getPlaylist(playlistId);
+      setListName(playlist.title || '');
+      setListDescription(playlist.description || '');
+    } catch (error) {
+      console.error('Error loading playlist:', error);
+      Alert.alert('Error', 'Failed to load playlist details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
     if (!listName.trim()) {
-      Alert.alert('Error', 'Please enter a list name');
+      Alert.alert('Error', 'Please enter a playlist name');
       return;
     }
 
     try {
-      setCreating(true);
-      await playlistService.createPlaylist({
+      setSaving(true);
+      await playlistService.updatePlaylist(playlistId, {
         title: listName.trim(),
         description: listDescription.trim()
       });
       
-      Alert.alert('Success', `Playlist "${listName}" created!`, [
+      Alert.alert('Success', 'Playlist updated successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
-      console.error('Error creating playlist:', error);
-      Alert.alert('Error', error.formattedMessage || 'Failed to create playlist');
+      console.error('Error updating playlist:', error);
+      Alert.alert('Error', error.formattedMessage || 'Failed to update playlist');
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <View style={[globalStyles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: colors.textSecondary, marginTop: 12 }}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
@@ -49,7 +81,7 @@ const CreateListScreen = ({ navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create New Playlist</Text>
+        <Text style={styles.headerTitle}>Edit Playlist</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -62,7 +94,7 @@ const CreateListScreen = ({ navigation }) => {
             placeholderTextColor={colors.textSecondary}
             value={listName}
             onChangeText={setListName}
-            editable={!creating}
+            editable={!saving}
           />
 
           <Text style={styles.label}>Description (Optional)</Text>
@@ -75,20 +107,20 @@ const CreateListScreen = ({ navigation }) => {
             multiline
             numberOfLines={4}
             textAlignVertical="top"
-            editable={!creating}
+            editable={!saving}
           />
 
           <TouchableOpacity 
-            style={[styles.createButton, creating && styles.createButtonDisabled]} 
-            onPress={handleCreateList}
-            disabled={creating}
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
+            onPress={handleSave}
+            disabled={saving}
           >
-            {creating ? (
+            {saving ? (
               <ActivityIndicator size="small" color={colors.background} />
             ) : (
               <>
-                <Ionicons name="add" size={20} color={colors.background} />
-                <Text style={styles.createButtonText}>Create Playlist</Text>
+                <Ionicons name="checkmark" size={20} color={colors.background} />
+                <Text style={styles.saveButtonText}>Save Changes</Text>
               </>
             )}
           </TouchableOpacity>
@@ -144,7 +176,7 @@ const styles = {
     height: 100,
     textAlignVertical: 'top',
   },
-  createButton: {
+  saveButton: {
     flexDirection: 'row',
     backgroundColor: colors.primary,
     padding: 16,
@@ -153,10 +185,10 @@ const styles = {
     justifyContent: 'center',
     gap: 8,
   },
-  createButtonDisabled: {
+  saveButtonDisabled: {
     opacity: 0.6,
   },
-  createButtonText: {
+  saveButtonText: {
     color: colors.background,
     fontSize: 16,
     fontWeight: 'bold',
@@ -164,5 +196,4 @@ const styles = {
   },
 };
 
-export default CreateListScreen;
-
+export default EditPlaylistScreen;

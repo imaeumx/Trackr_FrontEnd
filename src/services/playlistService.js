@@ -209,6 +209,26 @@ export const playlistService = {
     }
   },
 
+  // Update movie rating in playlist
+  async updateMovieRating(playlistId, movieId, rating) {
+    try {
+      if (!movieId) {
+        throw new Error('Movie ID is required');
+      }
+      
+      if (rating < 1 || rating > 5) {
+        throw new Error('Rating must be between 1 and 5');
+      }
+      
+      const response = await api.patch(`/playlists/${playlistId}/update_item_rating/${movieId}/`, {
+        rating
+      });
+      return response.data;
+    } catch (error) {
+      throw error.formattedMessage || error.response?.data || error;
+    }
+  },
+
   // Get playlist items
   async getPlaylistItems(playlistId) {
     try {

@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   Linking,
   Platform,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
+import CustomScrollView from '../components/CustomScrollView';
 
 const HelpSupportScreen = ({ navigation }) => {
   const [expandedFAQ, setExpandedFAQ] = useState(null);
@@ -117,7 +117,10 @@ const HelpSupportScreen = ({ navigation }) => {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.content}>
+      <CustomScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+      >
         {/* Introduction */}
         <View style={[styles.section, { backgroundColor: colors.card }]}>
           <Ionicons name="information-circle" size={48} color={colors.primary} style={styles.sectionIcon} />
@@ -196,7 +199,7 @@ const HelpSupportScreen = ({ navigation }) => {
         </View>
 
         <View style={{ height: 40 }} />
-      </ScrollView>
+      </CustomScrollView>
     </View>
   );
 };

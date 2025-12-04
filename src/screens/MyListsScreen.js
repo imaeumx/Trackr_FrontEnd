@@ -1,5 +1,5 @@
 // src/screens/MyListsScreen.js
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
 
 const MyListsScreen = ({ navigation }) => {
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedLists, setSelectedLists] = useState([]);
+  
   // Mock data for lists
   const lists = [
     { id: 1, name: 'Favorite Movies', description: 'My all-time favorites', count: 12 },
@@ -20,49 +23,129 @@ const MyListsScreen = ({ navigation }) => {
   ];
 
   const handleListPress = (list) => {
-    Alert.alert(list.name, `Viewing ${list.count} items in this list`);
+    console.log('handleListPress called:', { listId: list.id, selectionMode });
+    if (selectionMode) {
+      toggleListSelection(list.id);
+    } else {
+      navigation.navigate('PlaylistDetail', {
+        playlistId: list.id,
+        playlistTitle: list.name
+      });
+    }
   };
 
-  const handleDeleteList = (list) => {
-    Alert.alert('Delete List', `Are you sure you want to delete "${list.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive' }
-    ]);
+  const toggleListSelection = (listId) => {
+    console.log('toggleListSelection called:', listId);
+    if (selectedLists.includes(listId)) {
+      setSelectedLists(selectedLists.filter(id => id !== listId));
+    } else {
+      setSelectedLists([...selectedLists, listId]);
+    }
   };
 
-  const renderList = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.listItem}
-      onPress={() => handleListPress(item)}
-    >
-      <View style={styles.listInfo}>
-        <Text style={styles.listName}>{item.name}</Text>
-        <Text style={styles.listDescription}>{item.description}</Text>
-        <Text style={styles.listCount}>{item.count} items</Text>
-      </View>
-      <View style={styles.listActions}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleDeleteList(item)}
-        >
-          <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-        </TouchableOpacity>
-        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-      </View>
-    </TouchableOpacity>
-  );
+  const handleBulkDelete = () => {
+    const count = selectedLists.length;
+    Alert.alert(
+      'Delete Lists',
+      `Are you sure you want to delete ${count} ${count === 1 ? 'list' : 'lists'}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            // Perform bulk delete
+            Alert.alert('Success', `${count} ${count === 1 ? 'list' : 'lists'} deleted successfully`);
+            setSelectedLists([]);
+            setSelectionMode(false);
+          }
+        }
+      ]
+    );
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedLists([]);
+  };
+
+  const selectAll = () => {
+    if (selectedLists.length === lists.length) {
+      setSelectedLists([]);
+    } else {
+      setSelectedLists(lists.map(list => list.id));
+    }
+  };
+
+  const renderList = ({ item }) => {
+    const isSelected = selectedLists.includes(item.id);
+    
+    return (
+      <TouchableOpacity 
+        style={[
+          styles.listItem,
+          isSelected && { backgroundColor: colors.primary + '10', borderLeftWidth: 4, borderLeftColor: colors.primary }
+        ]}
+        onPress={() => handleListPress(item)}
+        onLongPress={() => {
+          if (!selectionMode) {
+            setSelectionMode(true);
+            toggleListSelection(item.id);
+          }
+        }}
+      >
+        {selectionMode && (
+          <View style={styles.checkbox}>
+            <Ionicons 
+              name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
+              size={24} 
+              color={isSelected ? colors.primary : colors.textSecondary} 
+            />
+          </View>
+        )}
+        <View style={styles.listInfo}>
+          <Text style={styles.listName}>{item.name}</Text>
+          <Text style={styles.listDescription}>{item.description}</Text>
+          <Text style={styles.listCount}>{item.count} items</Text>
+        </View>
+        {!selectionMode && (
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <Text style={globalStyles.logo}>TrackR</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          <TouchableOpacity onPress={toggleSelectionMode}>
+            <Ionicons 
+              name={selectionMode ? "close-circle" : "checkmark-circle-outline"} 
+              size={24} 
+              color={colors.text} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
       
       <View style={styles.content}>
-        <Text style={styles.title}>My Lists</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.title}>
+            {selectionMode ? `${selectedLists.length} Selected` : 'My Lists'}
+          </Text>
+          {selectionMode && lists.length > 0 && (
+            <TouchableOpacity onPress={selectAll}>
+              <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '600' }}>
+                {selectedLists.length === lists.length ? 'Deselect All' : 'Select All'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
         
         {lists.length === 0 ? (
           <View style={styles.emptyState}>
@@ -80,13 +163,26 @@ const MyListsScreen = ({ navigation }) => {
           />
         )}
         
-        <TouchableOpacity 
-          style={styles.createButton}
-          onPress={() => navigation.navigate('CreateList')}
-        >
-          <Ionicons name="add" size={24} color={colors.primary} />
-          <Text style={styles.createButtonText}>Create New List</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={styles.createButton}
+            onPress={() => navigation.navigate('CreateList')}
+          >
+            <Ionicons name="add" size={24} color={colors.primary} />
+            <Text style={styles.createButtonText}>Create New List</Text>
+          </TouchableOpacity>
+          {selectionMode && selectedLists.length > 0 && (
+            <TouchableOpacity 
+              style={[styles.deleteButton]}
+              onPress={handleBulkDelete}
+            >
+              <Ionicons name="trash" size={24} color="#FFFFFF" />
+              <Text style={[styles.deleteButtonText]}>
+                Delete {selectedLists.length}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -124,6 +220,9 @@ const styles = {
     backgroundColor: colors.card,
     borderRadius: 8,
     marginBottom: 12,
+  },
+  checkbox: {
+    marginRight: 12,
   },
   listInfo: {
     flex: 1,
@@ -178,12 +277,33 @@ const styles = {
     backgroundColor: colors.card,
     borderRadius: 8,
     marginTop: 16,
+    flex: 1,
   },
   createButtonText: {
     marginLeft: 8,
     fontSize: 16,
     fontWeight: '600',
     color: colors.primary,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: colors.error,
+    borderRadius: 8,
+    flex: 1,
+  },
+  deleteButtonText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 };
 

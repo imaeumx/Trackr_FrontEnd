@@ -171,24 +171,24 @@ const SignInScreen = ({ navigation }) => {
 
   const handleSignUp = async () => {
     if (!signUpUsername || !signUpEmail || !signUpPassword || !retypePassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showError('Error', 'Please fill in all fields');
       return;
     }
 
     if (signUpPassword !== retypePassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showError('Error', 'Passwords do not match');
       return;
     }
 
     if (signUpPassword.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters long');
+      showError('Error', 'Password must be at least 8 characters long');
       return;
     }
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(signUpEmail)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      showError('Error', 'Please enter a valid email address');
       return;
     }
 
@@ -202,8 +202,14 @@ const SignInScreen = ({ navigation }) => {
       });
       console.log('Sign up successful:', result);
 
-      Alert.alert('Success', `Welcome to TrackR, ${signUpUsername}!`);
-      navigation.replace('Playlist');
+      showError('Success', `Welcome to TrackR, ${signUpUsername}!`, [
+        { text: 'OK', onPress: () => {
+          setErrorModal(null);
+          setTimeout(() => {
+            navigation.replace('Playlist');
+          }, 500);
+        }}
+      ]);
     } catch (error) {
       console.error('Sign up error details:', error);
 
@@ -238,19 +244,19 @@ const SignInScreen = ({ navigation }) => {
         errorMessage = 'Connection timeout. Server may be offline or unreachable.';
       }
 
-      Alert.alert(
+      showError(
         'Registration Failed',
         errorMessage,
         [
           {
             text: 'Try Again',
             onPress: () => {
+              setErrorModal(null);
               // Clear password fields for retry
               setSignUpPassword('');
               setRetypePassword('');
             }
-          },
-          { text: 'OK' }
+          }
         ]
       );
     } finally {
@@ -259,14 +265,15 @@ const SignInScreen = ({ navigation }) => {
   };
 
   const handleGuest = () => {
-    Alert.alert(
+    showError(
       'Continue as Guest',
       'You can browse movies and series, but some features require an account.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', onPress: () => setErrorModal(null) },
         {
           text: 'Continue',
           onPress: () => {
+            setErrorModal(null);
             // Navigate back to home as guest
             navigation.replace('Home');
           }
@@ -360,17 +367,14 @@ const SignInScreen = ({ navigation }) => {
 
               <TextInput
                 style={styles.input}
-                placeholder="Retype Password"
+                placeholder="Verify Password"
                 placeholderTextColor={colors.textSecondary}
                 value={retypePassword}
                 onChangeText={setRetypePassword}
                 secureTextEntry
                 editable={!loading}
-                onSubmitEditing={() => {
-                  if (signUpPassword !== retypePassword) {
-                    showInputError('Password', 'Passwords do not match');
-                  }
-                }}
+                returnKeyType="go"
+                onSubmitEditing={handleSignUp}
               />
 
               <TouchableOpacity
@@ -425,11 +429,8 @@ const SignInScreen = ({ navigation }) => {
                 onChangeText={setPassword}
                 secureTextEntry
                 editable={!loading}
-                onSubmitEditing={() => {
-                  if (!password) {
-                    showInputError('Password', 'Password is required');
-                  }
-                }}
+                returnKeyType="go"
+                onSubmitEditing={handleSignIn}
               />
 
               <TouchableOpacity

@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
 
 const { width: screenWidth } = Dimensions.get('window');
-const CAROUSEL_HEIGHT = 200;
+const CAROUSEL_HEIGHT = 500;
 
 const FeaturedCarousel = ({ 
   title = "Featured", 
@@ -46,36 +46,36 @@ const FeaturedCarousel = ({
       tmdbId: 603,
       title: 'The Matrix',
       description: 'Discover the reality-bending classic',
-      image: 'https://image.tmdb.org/t/p/w1280/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg',
+      image: 'https://image.tmdb.org/t/p/original/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg',
       type: 'movie',
       color: '#FF6B35',
       rating: 8.7,
       year: 1999,
-      poster: 'https://image.tmdb.org/t/p/w500/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg'
+      poster: 'https://image.tmdb.org/t/p/original/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg'
     },
     {
       id: 157336,
       tmdbId: 157336,
       title: 'Interstellar',
       description: 'A journey through space and time',
-      image: 'https://image.tmdb.org/t/p/w1280/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg',
+      image: 'https://image.tmdb.org/t/p/original/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg',
       type: 'movie',
       color: '#4ECDC4',
       rating: 8.6,
       year: 2014,
-      poster: 'https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg'
+      poster: 'https://image.tmdb.org/t/p/original/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg'
     },
     {
       id: 155,
       tmdbId: 155,
       title: 'The Dark Knight',
       description: 'When the menace known as the Joker wreaks havoc',
-      image: 'https://image.tmdb.org/t/p/w1280/qJ2tW6WMUDux911r6m7haRef0WH.jpg',
+      image: 'https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg',
       type: 'movie',
       color: '#2196F3',
       rating: 9.0,
       year: 2008,
-      poster: 'https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg'
+      poster: 'https://image.tmdb.org/t/p/original/qJ2tW6WMUDux911r6m7haRef0WH.jpg'
     }
   ];
 

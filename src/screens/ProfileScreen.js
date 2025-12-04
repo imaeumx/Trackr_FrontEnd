@@ -1,4 +1,4 @@
-// src/screens/ProfileScreen.js - UPDATED (Removed My Lists)
+// src/screens/ProfileScreen.js - UPDATED (Removed Tracking Section)
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -65,30 +65,6 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  const handleFavorites = () => {
-    if (!isLoggedIn) {
-      Alert.alert('Sign In Required', 'Please sign in to view favorites.');
-      navigation.navigate('Sign In');
-      return;
-    }
-    Alert.alert('Favorites', 
-      'Favorites feature coming soon!\n\n' +
-      'This will allow you to mark movies and series as favorites for quick access.'
-    );
-  };
-
-  const handleWatchHistory = () => {
-    if (!isLoggedIn) {
-      Alert.alert('Sign In Required', 'Please sign in to view watch history.');
-      navigation.navigate('Sign In');
-      return;
-    }
-    Alert.alert('Watch History', 
-      'Watch History feature coming soon!\n\n' +
-      'This will track all the movies and series you\'ve watched.'
-    );
-  };
-
   const handleHelpSupport = () => {
     navigation.navigate('HelpSupport');
   };
@@ -106,7 +82,7 @@ const ProfileScreen = ({ navigation }) => {
           <Ionicons name="person-circle-outline" size={80} color={colors.textSecondary} />
           <Text style={[styles.notLoggedInTitle, { color: colors.text }]}>Not Signed In</Text>
           <Text style={[styles.notLoggedInText, { color: colors.textSecondary }]}>
-            Please sign in to access your profile and lists
+            Please sign in to access your profile
           </Text>
           <TouchableOpacity 
             style={[styles.signInButton, { backgroundColor: colors.primary }]}
@@ -147,22 +123,6 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={[styles.username, { color: colors.text }]}>{currentUser?.username}</Text>
           <Text style={[styles.userId, { color: colors.textSecondary }]}>User ID: {currentUser?.id}</Text>
           <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{currentUser?.email}</Text>
-        </View>
-
-        <View style={[styles.section, { backgroundColor: colors.background }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Tracking</Text>
-          
-          <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border, backgroundColor: colors.card }]} onPress={handleFavorites}>
-            <Ionicons name="heart" size={24} color={colors.primary} />
-            <Text style={[styles.menuText, { color: colors.text }]}>Favorites</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.menuItem, { borderBottomColor: colors.border, backgroundColor: colors.card }]} onPress={handleWatchHistory}>
-            <Ionicons name="time" size={24} color={colors.primary} />
-            <Text style={[styles.menuText, { color: colors.text }]}>Watch History</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
         </View>
 
         <View style={[styles.section, { backgroundColor: colors.background }]}>

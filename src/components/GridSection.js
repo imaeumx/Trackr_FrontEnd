@@ -1,6 +1,6 @@
 // src/components/GridSection.js - WITH FIXED GRID
 import React from 'react';
-import { View, Text, Dimensions } from 'react-native';
+import { View, Text, Dimensions, StyleSheet } from 'react-native';
 import MovieCard from './MovieCard';
 import { globalStyles } from '../styles/globalStyles';
 
@@ -10,6 +10,7 @@ const GridSection = ({
   title,
   data,
   onItemPress,
+  onAddToList,
   itemsPerRow = 9,
   showLocalBadge = false,
   isLoggedIn = false
@@ -23,8 +24,8 @@ const GridSection = ({
     );
   }
 
-  // Calculate card dimensions
-  const horizontalPadding = 16; // From globalStyles.section
+  // Calculate card dimensions with fixed widths
+  const horizontalPadding = 16;
   const itemSpacing = 8;
   const availableWidth = screenWidth - (horizontalPadding * 2);
   const cardWidth = (availableWidth - (itemSpacing * (itemsPerRow - 1))) / itemsPerRow;
@@ -32,7 +33,6 @@ const GridSection = ({
   // Function to handle item press with proper parameters
   const handleItemPress = (item) => {
     if (onItemPress) {
-      // Ensure we pass the right parameters for navigation
       const itemData = {
         ...item,
         tmdbId: item.tmdb_id || item.id,
@@ -42,34 +42,47 @@ const GridSection = ({
     }
   };
 
+  const styles = StyleSheet.create({
+    cardWrapper: {
+      width: cardWidth,
+      marginRight: (itemSpacing),
+      marginBottom: 16,
+      overflow: 'hidden',
+    }
+  });
+
   console.log('GridSection - isLoggedIn:', isLoggedIn, 'showAddToList:', isLoggedIn);
 
   return (
     <View style={globalStyles.section}>
       <Text style={globalStyles.sectionTitle}>{title}</Text>
       <View style={globalStyles.gridContainer}>
-        {data.map((item, index) => (
-          <View
-            key={item.id || index}
-            style={{
-              width: cardWidth,
-              marginRight: (index + 1) % itemsPerRow === 0 ? 0 : itemSpacing,
-              marginBottom: 16,
-            }}
-          >
-            <MovieCard
-              item={{
-                ...item,
-                showAddToList: isLoggedIn, // Only show when logged in
-                isLoggedIn: isLoggedIn,
-              }}
-              index={index}
-              onPress={() => handleItemPress(item)}
-              itemsPerRow={itemsPerRow}
-              showLocalBadge={showLocalBadge}
-            />
-          </View>
-        ))}
+        {data.map((item, index) => {
+          // Remove right margin on last item of each row
+          const isLastInRow = (index + 1) % itemsPerRow === 0;
+          return (
+            <View
+              key={item.id || index}
+              style={[
+                styles.cardWrapper,
+                isLastInRow && { marginRight: 0 }
+              ]}
+            >
+              <MovieCard
+                item={{
+                  ...item,
+                  showAddToList: isLoggedIn,
+                  isLoggedIn: isLoggedIn,
+                }}
+                index={index}
+                onPress={() => handleItemPress(item)}
+                onAddToList={onAddToList}
+                itemsPerRow={itemsPerRow}
+                showLocalBadge={showLocalBadge}
+              />
+            </View>
+          );
+        })}
       </View>
     </View>
   );

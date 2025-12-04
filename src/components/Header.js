@@ -1,8 +1,9 @@
 // src/components/Header.js
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
+import SearchDropdown from './SearchDropdown';
 
 const Header = ({ 
   navigation, 
@@ -14,8 +15,26 @@ const Header = ({
   currentUser,
   onProfilePress,
   searchPlaceholder = "Search...",
-  searchEditable = true
+  searchEditable = true,
+  searchResults = [],
+  searchLoading = false,
+  onSearchResultPress = null,
+  onClearSearch = null
 }) => {
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+
+  const handleSearchChange = (text) => {
+    setSearchQuery(text);
+    setShowSearchDropdown(text.trim().length > 0);
+  };
+
+  const handleSearchResult = (item) => {
+    if (onSearchResultPress) {
+      onSearchResultPress(item);
+    }
+    setShowSearchDropdown(false);
+  };
+
   return (
     <View style={globalStyles.header}>
       <Text style={globalStyles.logo}>TrackR</Text>
@@ -27,7 +46,7 @@ const Header = ({
             placeholder={searchPlaceholder}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={handleSearchChange}
             onSubmitEditing={onSearch}
             returnKeyType="search"
             editable={searchEditable}
@@ -35,6 +54,14 @@ const Header = ({
           <TouchableOpacity onPress={onSearch} style={globalStyles.searchButton}>
             <Ionicons name="search" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
+          <SearchDropdown 
+            results={searchResults}
+            loading={searchLoading}
+            query={searchQuery}
+            onResultPress={handleSearchResult}
+            onClose={() => setShowSearchDropdown(false)}
+            isVisible={showSearchDropdown}
+          />
         </View>
         
         <View style={globalStyles.menuContainer}>

@@ -1,6 +1,5 @@
-// src/components/MovieCard.js - UPDATED WITH PROPER SIZING
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
 
@@ -9,36 +8,33 @@ const { width: screenWidth } = Dimensions.get('window');
 const MovieCard = ({ 
   item, 
   index, 
-  onPress, 
+  onPress,
+  onAddToList, 
   itemsPerRow = 9,
   showLocalBadge = false
 }) => {
   if (!item) return null;
 
-  // Function to handle Add to List press
-  const handleAddToListPress = (e) => {
-    if (e && e.stopPropagation) e.stopPropagation(); // Prevent card press
-    
-    // Just trigger the main onPress to go to detail page
+  const horizontalPadding = 16;
+  const itemSpacing = 8;
+  const availableWidth = screenWidth - (horizontalPadding * 2);
+  const cardWidth = (availableWidth - (itemSpacing * (itemsPerRow - 1))) / itemsPerRow;
+  const cardHeight = cardWidth * 1.4;
+
+  const handleCardPress = () => {
     if (onPress) {
       onPress(item);
     }
   };
 
-  // Calculate dynamic width based on itemsPerRow
-  const horizontalPadding = 16; // padding from globalStyles.section
-  const itemSpacing = 8; // marginRight in MovieCard style
-  const availableWidth = screenWidth - (horizontalPadding * 2);
-  const cardWidth = (availableWidth - (itemSpacing * (itemsPerRow - 1))) / itemsPerRow;
-  const cardHeight = cardWidth * 1.4; // Maintain 1.4 aspect ratio
-
-  // Debug log
-  if (index === 0) {
-    console.log('MovieCard - First card showAddToList:', item.showAddToList, 'isLoggedIn:', item.isLoggedIn);
-  }
+  const handleAddToList = () => {
+    if (onAddToList) {
+      onAddToList(item);
+    }
+  };
 
   return (
-    <TouchableOpacity 
+    <View 
       style={[
         globalStyles.movieCard,
         { 
@@ -47,50 +43,53 @@ const MovieCard = ({
           marginBottom: 16,
         }
       ]}
-      onPress={() => onPress && onPress(item)}
-      activeOpacity={0.7}
     >
-      <View style={[globalStyles.movieImageContainer, { height: cardHeight }]}>
-        {item.poster ? (
-          <Image 
-            source={{ uri: item.poster }} 
-            style={[globalStyles.movieImage, { height: cardHeight }]}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={[globalStyles.movieImage, globalStyles.movieImagePlaceholder, { height: cardHeight }]}>
-            <Ionicons 
-              name={item.type === 'movie' ? 'film' : 'tv'} 
-              size={14} 
-              color={colors.textSecondary} 
+      <TouchableOpacity 
+        onPress={handleCardPress}
+        activeOpacity={0.7}
+      >
+        <View style={[globalStyles.movieImageContainer, { height: cardHeight }]}>
+          {item.poster ? (
+            <Image 
+              source={{ uri: item.poster }} 
+              style={[globalStyles.movieImage, { height: cardHeight }]}
+              resizeMode="cover"
             />
+          ) : (
+            <View style={[globalStyles.movieImage, globalStyles.movieImagePlaceholder, { height: cardHeight }]}>
+              <Ionicons 
+                name={item.type === 'movie' ? 'film' : 'tv'} 
+                size={14} 
+                color={colors.textSecondary} 
+              />
+            </View>
+          )}
+          <View style={[
+            globalStyles.typeBadge,
+            { backgroundColor: item.type === 'movie' ? colors.primary : colors.secondary }
+          ]}>
+            <Text style={globalStyles.typeText}>
+              {item.type === 'movie' ? 'MOVIE' : 'SERIES'}
+            </Text>
           </View>
-        )}
-        <View style={[
-          globalStyles.typeBadge,
-          { backgroundColor: item.type === 'movie' ? colors.primary : colors.secondary }
-        ]}>
-          <Text style={globalStyles.typeText}>
-            {item.type === 'movie' ? 'MOVIE' : 'SERIES'}
-          </Text>
+          {showLocalBadge && item.isLocal && (
+            <View style={globalStyles.localBadge}>
+              <Text style={globalStyles.localBadgeText}>Local</Text>
+            </View>
+          )}
         </View>
-        {showLocalBadge && item.isLocal && (
-          <View style={globalStyles.localBadge}>
-            <Text style={globalStyles.localBadgeText}>Local</Text>
-          </View>
-        )}
-      </View>
-      <Text style={globalStyles.movieTitle} numberOfLines={2}>
-        {item.title || 'Unknown Title'}
-      </Text>
-      <Text style={globalStyles.movieYear}>
-        {item.year || 'N/A'}
-      </Text>
-      <View style={globalStyles.ratingContainer}>
-            <Ionicons name="star" size={8} color={colors.warning} />
-        <Text style={globalStyles.rating}>{item.rating || 'N/A'}</Text>
-      </View>
-      {/* Optional Add to List button in card footer */}
+        <Text style={globalStyles.movieTitle} numberOfLines={1} ellipsizeMode="tail">
+          {item.title || 'Unknown Title'}
+        </Text>
+        <Text style={globalStyles.movieYear} numberOfLines={1} ellipsizeMode="tail">
+          {item.year || 'N/A'}
+        </Text>
+        <View style={globalStyles.ratingContainer}>
+          <Ionicons name="star" size={8} color={colors.warning} />
+          <Text style={globalStyles.rating}>{item.rating || 'N/A'}</Text>
+        </View>
+      </TouchableOpacity>
+      
       {item.showAddToList && (
         <TouchableOpacity
           style={{ 
@@ -103,7 +102,7 @@ const MovieCard = ({
             borderRadius: 4,
             justifyContent: 'center'
           }}
-          onPress={handleAddToListPress}
+          onPress={handleAddToList}
           activeOpacity={0.6}
         >
           <Ionicons name="add" size={12} color="#fff" />
@@ -112,7 +111,7 @@ const MovieCard = ({
           </Text>
         </TouchableOpacity>
       )}
-    </TouchableOpacity>
+    </View>
   );
 };
 

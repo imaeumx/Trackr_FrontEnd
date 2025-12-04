@@ -63,12 +63,6 @@ export const platformStyles = {
   }),
 };
 
-// Movie card dimensions
-export const cardDimensions = {
-  width: (screenWidth - 80) / 9,
-  height: ((screenWidth - 80) / 9) * 1.4,
-};
-
 // Global styles
 export const globalStyles = StyleSheet.create({
   // Container styles
@@ -128,7 +122,7 @@ export const globalStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     position: 'relative',
-    maxWidth: 180,
+    flex: 0.35,
     marginRight: spacing.md,
   },
 
@@ -318,12 +312,13 @@ export const globalStyles = StyleSheet.create({
   },
 
   movieTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 2,
+    marginBottom: 4,
     textAlign: 'center',
     lineHeight: 15,
+    width: '100%',
   },
 
   movieYear: {
@@ -331,6 +326,7 @@ export const globalStyles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: 3,
     textAlign: 'center',
+    width: '100%',
   },
 
   ratingContainer: {
@@ -357,22 +353,3 @@ export const globalStyles = StyleSheet.create({
     height: 100,
   },
 });
-
-// Components for reuse
-export const Card = {
-  width: cardDimensions.width,
-  height: cardDimensions.height,
-  styles: {
-    movieCard: {
-      width: cardDimensions.width,
-    },
-    movieImage: {
-      width: '100%',
-      height: cardDimensions.height,
-    },
-    movieImagePlaceholder: {
-      width: '100%',
-      height: cardDimensions.height,
-    },
-  },
-};

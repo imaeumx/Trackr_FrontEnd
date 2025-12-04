@@ -1,5 +1,6 @@
 // src/services/auth.js - UPDATED WITH PERSISTENCE
 import api, { setAuthToken, getAuthToken, setCurrentUser, getCurrentUser } from './api';
+import { playlistService } from './playlistService';
 
 // Create an event emitter for auth state changes
 const authListeners = new Set();
@@ -30,6 +31,14 @@ export const authService = {
         };
         setCurrentUser(user);
         console.log('Sign up successful, token set');
+
+        // NOTE: Default playlists creation disabled - new users start with 0 playlists
+        // try {
+        //   await this.createDefaultPlaylists(user.id);
+        // } catch (err) {
+        //   console.error('Failed to create default playlists after signup:', err);
+        // }
+
         this.notifyAuthChange(true, user);
       }
       return response.data;
@@ -60,6 +69,19 @@ export const authService = {
         };
         setCurrentUser(user);
         console.log('Sign in successful, token set');
+
+        // Check if user has any playlists, if not, create default ones
+        try {
+          const playlists = await playlistService.getPlaylists();
+          const playlistsArray = Array.isArray(playlists) ? playlists : (playlists.results || []);
+          if (playlistsArray.length === 0) {
+            console.log('User has no playlists, creating default ones...');
+            await this.createDefaultPlaylists(user.id);
+          }
+        } catch (err) {
+          console.error('Error checking/creating default playlists:', err);
+        }
+
         this.notifyAuthChange(true, user);
         return response.data;
       } else {
@@ -80,6 +102,42 @@ export const authService = {
       } else {
         throw 'Login failed. Please try again.';
       }
+    }
+  },
+
+  // Create default playlists for new user
+  async createDefaultPlaylists(userId) {
+    try {
+      console.log('Creating default playlists for user:', userId);
+      
+      const defaultPlaylists = [
+        {
+          title: "Watchlist",
+          description: "Movies and series I want to watch"
+        },
+        {
+          title: "Favorites",
+          description: "My all-time favorite movies and series"
+        },
+        {
+          title: "Watched",
+          description: "Movies and series I've already watched"
+        }
+      ];
+      
+      // Create each default playlist
+      for (const playlistData of defaultPlaylists) {
+        try {
+          await playlistService.createPlaylist(playlistData);
+          console.log(`Created playlist: ${playlistData.title}`);
+        } catch (error) {
+          console.error(`Failed to create playlist ${playlistData.title}:`, error);
+        }
+      }
+      
+      console.log('Default playlists created successfully');
+    } catch (error) {
+      console.error('Error creating default playlists:', error);
     }
   },
 

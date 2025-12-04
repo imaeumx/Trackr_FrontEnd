@@ -53,6 +53,24 @@ export const movieService = {
     }
   },
 
+  // Get top-rated movies/series - NOW AVAILABLE in your backend
+  async getTopRatedMovies(type = 'movie', page = 1) {
+    try {
+      const response = await api.get('/tmdb/top-rated/', {
+        params: { type, page }
+      });
+      
+      if (!response.data || !Array.isArray(response.data.results)) {
+        throw new Error('Invalid response format from server');
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Get top rated movies error:', error);
+      throw error.response?.data || error.message || 'Failed to load top rated movies';
+    }
+  },
+
   // Get movie details from TMDB - THIS IS AVAILABLE
   async getMovieDetails(tmdbId) {
     try {
@@ -194,8 +212,8 @@ export const movieService = {
   // Get trending movies - NOT AVAILABLE in your backend
   async getTrendingMovies(timeWindow = 'week') {
     try {
-      // Since you don't have this endpoint, let's use popular movies
-      return await this.getPopularMovies('movie', 1);
+      // Since you don't have this endpoint, let's use top-rated movies
+      return await this.getTopRatedMovies('movie', 1);
     } catch (error) {
       console.error('Get trending movies error:', error);
       throw error.response?.data || error.message || 'Failed to load trending movies';
@@ -213,14 +231,82 @@ export const movieService = {
     }
   },
 
-  // NEW: Get top rated movies - NOT AVAILABLE in your backend
+  // DEPRECATED: Get top rated movies - use getTopRatedMovies instead
   async getTopRatedMovies(page = 1) {
     try {
-      // Since you don't have this endpoint, let's use popular movies
-      return await this.getPopularMovies('movie', page);
+      return await this.getTopRatedMovies('movie', page);
     } catch (error) {
       console.error('Get top rated movies error:', error);
       throw error.response?.data || error.message || 'Failed to load top rated movies';
+    }
+  },
+
+  // NEW: Get movie trailers from TMDB (direct call, not through backend)
+  async getMovieTrailers(tmdbId) {
+    try {
+      if (!tmdbId) {
+        throw new Error('TMDB ID is required');
+      }
+
+      const API_KEY = 'b5ae97629b66c7bff8eaa682cefcc1cf';
+      const response = await fetch(
+        `https://api.themoviedb.org/3/movie/${tmdbId}/videos?api_key=${API_KEY}`
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      
+      if (!data.results) {
+        return null;
+      }
+
+      // First try to find Trailer or Teaser, then fall back to any YouTube video
+      const trailer = data.results.find(v => 
+        v.site === 'YouTube' && 
+        (v.type === 'Trailer' || v.type === 'Teaser')
+      ) || data.results.find(v => v.site === 'YouTube');
+
+      return trailer ? `https://www.youtube.com/embed/${trailer.key}` : null;
+    } catch (error) {
+      console.error('Get movie trailers error:', error);
+      return null;
+    }
+  },
+
+  // NEW: Get TV show trailers from TMDB (direct call, not through backend)
+  async getTVTrailers(tmdbId) {
+    try {
+      if (!tmdbId) {
+        throw new Error('TMDB ID is required');
+      }
+
+      const API_KEY = 'b5ae97629b66c7bff8eaa682cefcc1cf';
+      const response = await fetch(
+        `https://api.themoviedb.org/3/tv/${tmdbId}/videos?api_key=${API_KEY}`
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      
+      if (!data.results) {
+        return null;
+      }
+
+      const trailer = data.results.find(v => 
+        v.site === 'YouTube' && 
+        (v.type === 'Trailer' || v.type === 'Teaser')
+      ) || data.results.find(v => v.site === 'YouTube');
+
+      return trailer ? `https://www.youtube.com/embed/${trailer.key}` : null;
+    } catch (error) {
+      console.error('Get TV trailers error:', error);
+      return null;
     }
   }
 };
