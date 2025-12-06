@@ -195,9 +195,9 @@ export const playlistService = {
         throw new Error('Movie ID is required');
       }
       
-      const validStatuses = ['to_watch', 'watching', 'watched'];
+      const validStatuses = ['to_watch', 'watching', 'watched', 'did_not_finish'];
       if (!validStatuses.includes(status)) {
-        throw new Error('Invalid status. Must be: to_watch, watching, or watched');
+        throw new Error('Invalid status. Must be: to_watch, watching, watched, or did_not_finish');
       }
       
       const response = await api.patch(`/playlists/${playlistId}/update_item_status/${movieId}/`, {

@@ -1,26 +1,98 @@
 // src/screens/MyListsScreen.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   FlatList,
-  Alert
+  Alert,
+  StyleSheet,
+  TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
+import { playlistService } from '../services/playlistService';
 
 const MyListsScreen = ({ navigation }) => {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedLists, setSelectedLists] = useState([]);
-  
-  // Mock data for lists
-  const lists = [
-    { id: 1, name: 'Favorite Movies', description: 'My all-time favorites', count: 12 },
-    { id: 2, name: 'To Watch', description: 'Movies and shows to watch', count: 8 },
-    { id: 3, name: 'Sci-Fi Collection', description: 'Best sci-fi content', count: 15 },
-    { id: 4, name: 'Marvel Universe', description: 'All MCU movies', count: 25 },
-  ];
+  const [lists, setLists] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const statusOrder = ['To Watch', 'Watching', 'Watched'];
+  const statusOrderLower = statusOrder.map(t => t.toLowerCase());
+
+  const getFilteredLists = () => {
+    if (!searchQuery.trim()) {
+      return lists;
+    }
+    return lists.filter(list => 
+      list.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
+
+  const sortPlaylists = (arr) => {
+    const normalizeTitle = (t = '') => t.trim().toLowerCase();
+    console.log('📋 sortPlaylists called with', arr.length, 'items');
+    
+    const sorted = [...arr].sort((a, b) => {
+      const aTitleNorm = normalizeTitle(a.title);
+      const bTitleNorm = normalizeTitle(b.title);
+      
+      // Find indices in statusOrderLower
+      const aStatusIdx = statusOrderLower.indexOf(aTitleNorm);
+      const bStatusIdx = statusOrderLower.indexOf(bTitleNorm);
+      
+      const aIsStatus = aStatusIdx !== -1;
+      const bIsStatus = bStatusIdx !== -1;
+
+      // Status playlists ALWAYS come first, pinned at their exact position
+      if (aIsStatus && !bIsStatus) return -1;
+      if (!aIsStatus && bIsStatus) return 1;
+
+      // If both are status playlists, order by their position in statusOrder
+      if (aIsStatus && bIsStatus) {
+        return aStatusIdx - bStatusIdx;
+      }
+
+      // Both are user lists: sort by most recently updated
+      const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+      const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+      if (bTime !== aTime) return bTime - aTime;
+      
+      // Tie-breaker: alphabetical by title
+      return aTitleNorm.localeCompare(bTitleNorm);
+    });
+
+    console.log('📋 sortPlaylists OUTPUT:', sorted.map(p => p.title));
+    return sorted;
+  };
+
+  const loadLists = async () => {
+    try {
+      setLoading(true);
+      console.log('📋 loadLists START');
+      const resp = await playlistService.getPlaylists();
+      console.log('📋 Got response:', resp);
+      const arr = Array.isArray(resp) ? resp : resp.results || [];
+      console.log('📋 Extracted array, length:', arr.length);
+      console.log('📋 Array items:', arr.map(p => p.title));
+      const sorted = sortPlaylists(arr);
+      console.log('📋 Sorted result:', sorted.map(p => p.title));
+      setLists(sorted);
+      console.log('📋 loadLists END - setLists called');
+    } catch (error) {
+      console.error('Failed to load lists:', error);
+      Alert.alert('Error', 'Failed to load lists');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLists();
+  }, []);
 
   const handleListPress = (list) => {
     console.log('handleListPress called:', { listId: list.id, selectionMode });
@@ -29,7 +101,7 @@ const MyListsScreen = ({ navigation }) => {
     } else {
       navigation.navigate('PlaylistDetail', {
         playlistId: list.id,
-        playlistTitle: list.name
+        playlistTitle: list.title
       });
     }
   };
@@ -99,14 +171,15 @@ const MyListsScreen = ({ navigation }) => {
             <Ionicons 
               name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
               size={24} 
+              paddingLeft={5}
               color={isSelected ? colors.primary : colors.textSecondary} 
             />
           </View>
         )}
         <View style={styles.listInfo}>
-          <Text style={styles.listName}>{item.name}</Text>
+          <Text style={styles.listName}>{item.title}</Text>
           <Text style={styles.listDescription}>{item.description}</Text>
-          <Text style={styles.listCount}>{item.count} items</Text>
+          <Text style={styles.listCount}>{item.movie_count || 0} items</Text>
         </View>
         {!selectionMode && (
           <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -146,16 +219,32 @@ const MyListsScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
         </View>
+
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search playlists..."
+            placeholderTextColor={colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
         
-        {lists.length === 0 ? (
+        {getFilteredLists().length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="list-outline" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyText}>No lists yet</Text>
-            <Text style={styles.emptySubtext}>Create your first list to get started</Text>
+            <Text style={styles.emptyText}>{searchQuery ? 'No playlists found' : 'No lists yet'}</Text>
+            <Text style={styles.emptySubtext}>{searchQuery ? 'Try a different search' : 'Create your first list to get started'}</Text>
           </View>
         ) : (
           <FlatList
-            data={lists}
+            data={getFilteredLists()}
             renderItem={renderList}
             keyExtractor={item => item.id.toString()}
             style={styles.list}
@@ -188,7 +277,7 @@ const MyListsScreen = ({ navigation }) => {
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -209,6 +298,25 @@ const styles = {
     marginBottom: 16,
     color: colors.text,
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    color: colors.text,
+    fontSize: 14,
+  },
   list: {
     flex: 1,
   },
@@ -223,6 +331,7 @@ const styles = {
   },
   checkbox: {
     marginRight: 12,
+    paddingLeft: 5,
   },
   listInfo: {
     flex: 1,
@@ -305,6 +414,6 @@ const styles = {
     fontWeight: '600',
     color: '#FFFFFF',
   },
-};
+});
 
 export default MyListsScreen;

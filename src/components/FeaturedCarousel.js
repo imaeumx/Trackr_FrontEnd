@@ -117,7 +117,7 @@ const FeaturedCarousel = ({
       <View style={styles.itemContent}>
         <View style={[styles.typeBadge, { backgroundColor: item.color || colors.primary }]}>
           <Text style={styles.typeText}>
-            {item.type === 'movie' ? 'MOVIE' : item.type === 'series' ? 'SERIES' : 'PLAYLIST'}
+            {item.type === 'movie' ? 'FILM' : 'SERIES'}
           </Text>
         </View>
         <Text style={styles.itemTitle}>{item.title}</Text>

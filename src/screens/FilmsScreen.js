@@ -416,7 +416,32 @@ const FilmsScreen = ({ navigation }) => {
     try {
       setLoadingPlaylists(true);
       const userPlaylists = await playlistService.getPlaylists();
-      setPlaylists(Array.isArray(userPlaylists) ? userPlaylists : (userPlaylists.results || []));
+      const playlistsArray = Array.isArray(userPlaylists) ? userPlaylists : (userPlaylists.results || []);
+      
+      // Sort playlists: status playlists first, then by most recently updated
+      const statusOrder = ['To Watch', 'Watching', 'Watched'];
+      const sortedPlaylists = [...playlistsArray].sort((a, b) => {
+        // Check is_status_playlist flag first
+        const aIsStatus = a.is_status_playlist === true;
+        const bIsStatus = b.is_status_playlist === true;
+        
+        if (aIsStatus && !bIsStatus) return -1;
+        if (!aIsStatus && bIsStatus) return 1;
+        
+        // If both are status or both are user lists
+        if (aIsStatus && bIsStatus) {
+          const aIdx = statusOrder.indexOf(a.title);
+          const bIdx = statusOrder.indexOf(b.title);
+          return aIdx - bIdx;
+        }
+        
+        // Sort user lists by updated_at (most recent first)
+        const aTime = new Date(a.updated_at).getTime();
+        const bTime = new Date(b.updated_at).getTime();
+        return bTime - aTime;
+      });
+      
+      setPlaylists(sortedPlaylists);
       setShowPlaylistModal(true);
     } catch (error) {
       console.error('Error loading playlists:', error);

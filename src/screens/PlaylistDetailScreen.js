@@ -1,5 +1,6 @@
 // src/screens/PlaylistDetailScreen.js
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -15,174 +16,187 @@ import { Ionicons } from '@expo/vector-icons';
 import { playlistService } from '../services/playlistService';
 import { globalStyles, colors } from '../styles/globalStyles';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../hooks/useToast';
 import Toast from '../components/Toast';
+import CustomScrollView from '../components/CustomScrollView';
 
 const PlaylistDetailScreen = ({ route, navigation }) => {
+      // Reload if coming from edit screen
+      useEffect(() => {
+        if (route?.params?.reload) {
+          (async () => {
+            setLoading(true);
+            try {
+              const fetchedPlaylist = await playlistService.getPlaylist(playlistId);
+              setPlaylist(fetchedPlaylist);
+            } catch (error) {
+              console.error('Error fetching playlist:', error);
+            } finally {
+              setLoading(false);
+            }
+          })();
+          // Clear reload param so it doesn't keep reloading
+          navigation.setParams({ ...route.params, reload: false });
+        }
+      }, [route?.params?.reload]);
+    // Bulk delete handler for button
+    const handleBulkDelete = () => {
+      if (selectedItems.length > 0) {
+        setShowBulkDeleteModal(true);
+      } else {
+        setToast({ visible: true, message: 'No items selected.', type: 'error' });
+        setTimeout(() => setToast({ visible: false }), 2000);
+      }
+    };
   const { playlistId, playlistTitle } = route?.params || {};
   const [playlist, setPlaylist] = useState(null);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [movieToRemove, setMovieToRemove] = useState(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
-  const [ratingItem, setRatingItem] = useState(null);
   const [userRating, setUserRating] = useState(0);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedItems, setSelectedItems] = useState([]);
+  const [ratingItem, setRatingItem] = useState(null);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
-  
-  const { isLoggedIn } = useAuth();
+  const [deletingPlaylist, setDeletingPlaylist] = useState(false);
+  const [showDeletePlaylistModal, setShowDeletePlaylistModal] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: '' });
+
+  const { user } = useAuth();
+  const items = playlist?.items || [];
 
   useEffect(() => {
-    if (playlistId) {
-      loadPlaylistDetails();
-    } else {
-      // If no playlistId, stop loading immediately
-      setLoading(false);
-    }
-  }, [playlistId]);
+    const fetchPlaylist = async () => {
+      if (!playlistId) return;
+      setLoading(true);
+      try {
+        const fetchedPlaylist = await playlistService.getPlaylist(playlistId);
+        setPlaylist(fetchedPlaylist);
+      } catch (error) {
+        console.error('Error fetching playlist:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Reload when screen comes into focus (e.g., after editing)
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      if (playlistId) {
-        loadPlaylistDetails();
+    fetchPlaylist();
+  }, [playlistId, refreshing]);
+
+  // Force reload when returning from EditPlaylistScreen
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!playlistId) return;
+      (async () => {
+        setLoading(true);
+        try {
+          const fetchedPlaylist = await playlistService.getPlaylist(playlistId);
+          setPlaylist(fetchedPlaylist);
+        } catch (error) {
+          console.error('Error fetching playlist:', error);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, [playlistId])
+  );
+
+  const handleMoviePress = (item) => {
+    // Pass both TMDB ID and media type for robust navigation
+    const movie = item.movie || item;
+    const tmdbId = movie.tmdb_id || movie.id;
+    const mediaType = movie.media_type || movie.type || (item.media_type || item.type);
+    navigation.navigate('MovieDetail', { tmdbId, mediaType });
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode(prev => !prev);
+    setSelectedItems([]);
+  };
+
+  const toggleItemSelection = (itemId) => {
+    setSelectedItems(prev => {
+      if (prev.includes(itemId)) {
+        return prev.filter(id => id !== itemId);
+      } else {
+        return [...prev, itemId];
       }
     });
-
-    return unsubscribe;
-  }, [navigation, playlistId]);
-
-  const loadPlaylistDetails = async () => {
-    try {
-      setLoading(true);
-      console.log('Loading playlist details for ID:', playlistId);
-      
-      // Fetch playlist details
-      const playlistData = await playlistService.getPlaylist(playlistId);
-      console.log('Playlist data:', playlistData);
-      setPlaylist(playlistData);
-      
-      // Get playlist items - use items from getPlaylist if available, otherwise fetch separately
-      const itemsData = playlistData.items || await playlistService.getPlaylistItems(playlistId);
-      console.log('Items data:', itemsData);
-      setItems(itemsData);
-      
-    } catch (error) {
-      console.error('Error loading playlist details:', error);
-      Alert.alert(
-        'Error',
-        error.formattedMessage || 'Failed to load playlist details.',
-        [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadPlaylistDetails();
-  };
-
-  const handleUpdateStatus = async (itemId, newStatus) => {
-    try {
-      console.log('Updating status:', { itemId, newStatus });
-      
-      await playlistService.updateMovieStatus(playlistId, itemId, newStatus);
-      
-      // Update local state
-      const updatedItems = items.map(item => {
-        if (item.movie?.id === itemId || item.id === itemId) {
-          return { ...item, status: newStatus };
-        }
-        return item;
-      });
-      setItems(updatedItems);
-      
-      setShowStatusModal(false);
-      
-      // If marking as watched, show rating modal
-      if (newStatus === 'watched') {
-        setRatingItem(selectedItem);
-        setUserRating(0);
-        setShowRatingModal(true);
-      } else {
-        Alert.alert('Success', 'Status updated successfully');
-      }
-    } catch (error) {
-      console.error('Error updating status:', error);
-      Alert.alert(
-        'Error',
-        error.formattedMessage || 'Failed to update status.'
-      );
-    }
-  };
-
-  const handleRemoveMovie = (itemId, movieTitle) => {
-    console.log('Remove movie called with:', { itemId, movieTitle });
-    
-    // Open modal instead of Alert
-    setMovieToRemove({ itemId, movieTitle });
+  const handleRemoveMovie = (movieId, movieTitle) => {
+    setMovieToRemove({ movieId, movieTitle });
     setDeleteModalVisible(true);
   };
 
   const handleRemoveConfirm = async () => {
     if (!movieToRemove) return;
-
-    const { itemId, movieTitle } = movieToRemove;
-
+    const { movieId, movieTitle } = movieToRemove;
+    setDeleteModalVisible(false);
     try {
-      console.log('Remove confirmed! Removing movie:', { itemId, playlistId });
-      
-      setDeleteModalVisible(false);
-      setLoading(true);
-      
-      const result = await playlistService.removeMovieFromPlaylist(playlistId, itemId);
-      console.log('Remove result:', result);
-      
-      // Update local state - filter out the removed item
-      const updatedItems = items.filter(item => 
-        item.movie?.id !== itemId && item.id !== itemId
-      );
-      setItems(updatedItems);
-      
-      setMovieToRemove(null);
-      
+      await playlistService.removeMovieFromPlaylist(playlistId, movieId);
+      setToast({ visible: true, message: `Removed "${movieTitle}" from playlist.`, type: 'success' });
+      setRefreshing(true);
     } catch (error) {
       console.error('Error removing movie:', error);
-      Alert.alert(
-        'Error',
-        error.formattedMessage || 'Failed to remove movie.'
-      );
+      setToast({ visible: true, message: 'Failed to remove movie. Please try again.', type: 'error' });
     } finally {
-      setLoading(false);
+      setMovieToRemove(null);
+      setTimeout(() => setToast({ visible: false }), 3000);
     }
   };
 
   const handleRemoveCancel = () => {
-    console.log('Remove cancelled');
     setDeleteModalVisible(false);
     setMovieToRemove(null);
   };
 
-  const toggleSelectionMode = () => {
-    setSelectionMode(!selectionMode);
-    setSelectedItems([]);
+  const handleRefresh = async () => {
+    if (!playlistId) return;
+    setLoading(true);
+    try {
+      const fetchedPlaylist = await playlistService.getPlaylist(playlistId);
+      setPlaylist(fetchedPlaylist);
+      setToast({ visible: true, message: 'Playlist reloaded.', type: 'success' });
+    } catch (error) {
+      setToast({ visible: true, message: 'Failed to reload playlist.', type: 'error' });
+    } finally {
+      setLoading(false);
+      setTimeout(() => setToast({ visible: false }), 2000);
+    }
   };
 
-  const toggleItemSelection = (movieId) => {
-    if (selectedItems.includes(movieId)) {
-      setSelectedItems(selectedItems.filter(id => id !== movieId));
-    } else {
-      setSelectedItems([...selectedItems, movieId]);
+  const handleSubmitRating = async () => {
+    if (!ratingItem) return;
+    try {
+      await playlistService.rateMovieInPlaylist(ratingItem.id, userRating);
+      setToast({ visible: true, message: 'Rating submitted. Thank you!', type: 'success' });
+    } catch (error) {
+      console.error('Error submitting rating:', error);
+      setToast({ visible: true, message: 'Failed to submit rating. Please try again.', type: 'error' });
+    } finally {
+      setShowRatingModal(false);
+      setUserRating(0);
+      setRatingItem(null);
+      setTimeout(() => setToast({ visible: false }), 3000);
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    setShowBulkDeleteModal(false);
+    try {
+      for (const itemId of selectedItems) {
+        await playlistService.removeMovieFromPlaylist(playlistId, itemId);
+      }
+      setToast({ visible: true, message: 'Selected items deleted.', type: 'success' });
+      setRefreshing(true);
+    } catch (error) {
+      console.error('Error deleting items:', error);
+      setToast({ visible: true, message: 'Failed to delete items. Please try again.', type: 'error' });
+    } finally {
+      setSelectedItems([]);
+      setTimeout(() => setToast({ visible: false }), 3000);
     }
   };
 
@@ -194,113 +208,8 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleBulkDelete = () => {
-    setShowBulkDeleteModal(true);
-  };
-
-  const confirmBulkDelete = async () => {
-    const count = selectedItems.length;
-    setShowBulkDeleteModal(false);
-    
-    try {
-      setLoading(true);
-      // Delete each selected item
-      await Promise.all(
-        selectedItems.map(movieId => 
-          playlistService.removeMovieFromPlaylist(playlistId, movieId)
-        )
-      );
-      
-      // Refresh the list
-      await loadPlaylistDetails();
-      setToast({
-        visible: true,
-        message: `${count} ${count === 1 ? 'item' : 'items'} deleted successfully`,
-        type: 'success'
-      });
-      setSelectedItems([]);
-      setSelectionMode(false);
-    } catch (error) {
-      console.error('Bulk delete error:', error);
-      setToast({
-        visible: true,
-        message: 'Failed to delete some items. Please try again.',
-        type: 'error'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMoviePress = (item) => {
-    if (selectionMode) {
-      const movieId = item.movie?.id || item.id;
-      toggleItemSelection(movieId);
-      return;
-    }
-    
-    if (item.movie) {
-      navigation.navigate('MovieDetail', {
-        movieId: item.movie.tmdb_id || item.movie.id,
-        mediaType: item.movie.media_type || 'movie',
-        movie: {
-          id: item.movie.tmdb_id || item.movie.id,
-          title: item.movie.title,
-          type: item.movie.media_type || 'movie',
-          rating: 4.0,
-          year: item.movie.release_year,
-          poster: item.movie.poster_url
-        }
-      });
-    }
-  };
-
-  const handleSubmitRating = async () => {
-    if (userRating === 0) {
-      Alert.alert('Please Select a Rating', 'Please select a star rating before continuing.');
-      return;
-    }
-
-    try {
-      // Save rating to backend
-      await playlistService.updateMovieRating(playlistId, ratingItem?.movieId, userRating);
-      
-      // Update local state to show rating immediately
-      const updatedItems = items.map(item => {
-        if (item.movie?.id === ratingItem?.movieId || item.id === ratingItem?.movieId) {
-          return { ...item, user_rating: userRating };
-        }
-        return item;
-      });
-      setItems(updatedItems);
-      
-      setShowRatingModal(false);
-      Alert.alert(
-        'Rating Saved',
-        `You rated this ${ratingItem?.movie?.media_type === 'tv' ? 'series' : 'movie'} ${userRating} out of 5 stars!`
-      );
-    } catch (error) {
-      console.error('Error saving rating:', error);
-      Alert.alert('Error', 'Failed to save rating. Please try again.');
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'watched': return colors.primary;
-      case 'watching': return colors.warning;
-      case 'to_watch': return colors.textSecondary;
-      default: return colors.textSecondary;
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'watched': return 'Watched';
-      case 'watching': return 'Watching';
-      case 'to_watch': return 'To Watch';
-      default: return status;
-    }
+  const hideToast = () => {
+    setToast({ visible: false, message: '', type: '' });
   };
 
   const renderItem = ({ item }) => {
@@ -308,14 +217,19 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
     const movieId = movie.id || item.id;
     const movieTitle = movie.title || 'Unknown Movie';
     const isSelected = selectedItems.includes(movieId);
-    
     return (
       <TouchableOpacity
         style={[
           styles.itemCard,
           isSelected && { backgroundColor: colors.primary + '10', borderLeftWidth: 4, borderLeftColor: colors.primary }
         ]}
-        onPress={() => handleMoviePress(item)}
+        onPress={() => {
+          if (selectionMode) {
+            toggleItemSelection(movieId);
+          } else {
+            handleMoviePress(item);
+          }
+        }}
         onLongPress={() => {
           if (!selectionMode) {
             setSelectionMode(true);
@@ -326,15 +240,13 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
       >
         {selectionMode && (
           <View style={styles.checkbox}>
-            <Ionicons 
-              name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
-              size={24} 
-              color={isSelected ? colors.primary : colors.textSecondary} 
+            <Ionicons
+              name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+              size={24}
+              color={isSelected ? colors.primary : colors.textSecondary}
             />
           </View>
         )}
-        
-        {/* Movie Poster */}
         <View style={styles.posterContainer}>
           {movie.poster_url ? (
             <Image
@@ -344,62 +256,20 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
             />
           ) : (
             <View style={styles.posterPlaceholder}>
-              <Ionicons 
-                name={movie.media_type === 'tv' ? 'tv' : 'film'} 
-                size={32} 
-                color={colors.textSecondary} 
+              <Ionicons
+                name={movie.media_type === 'tv' ? 'tv' : 'film'}
+                size={32}
+                color={colors.textSecondary}
               />
             </View>
           )}
         </View>
-
-        {/* Movie Info */}
         <View style={styles.itemInfo}>
-          <Text style={styles.itemTitle} numberOfLines={2}>
-            {movieTitle}
-          </Text>
-          
+          <Text style={styles.itemTitle} numberOfLines={2}>{movieTitle}</Text>
           {movie.release_year && (
-            <Text style={styles.itemYear}>
-              {movie.release_year}
-            </Text>
-          )}
-          
-          {/* Status Button */}
-          <TouchableOpacity
-            style={[styles.statusButton, { borderColor: getStatusColor(item.status) }]}
-            onPress={() => {
-              setSelectedItem({ ...item, movieId });
-              setShowStatusModal(true);
-            }}
-            activeOpacity={0.6}
-          >
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {getStatusText(item.status)}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color={getStatusColor(item.status)} />
-          </TouchableOpacity>
-
-          {/* User Rating Display */}
-          {item.user_rating && item.user_rating > 0 && (
-            <View style={styles.userRatingContainer}>
-              <View style={styles.starsRow}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Ionicons
-                    key={star}
-                    name={star <= item.user_rating ? "star" : "star-outline"}
-                    size={16}
-                    color={colors.warning}
-                  />
-                ))}
-              </View>
-              <Text style={[styles.ratingLabel, { color: colors.warning }]}>
-                {item.user_rating}/5
-              </Text>
-            </View>
+            <Text style={styles.itemYear}>{movie.release_year}</Text>
           )}
         </View>
-
         {/* Remove Button */}
         {!selectionMode && (
           <TouchableOpacity
@@ -410,13 +280,22 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
             <Ionicons name="close-circle" size={24} color={colors.error} />
           </TouchableOpacity>
         )}
+        {selectionMode && isSelected && (
+          <TouchableOpacity
+            style={styles.removeButton}
+            onPress={() => handleRemoveMovie(movieId, movieTitle)}
+            activeOpacity={0.6}
+          >
+            <Ionicons name="trash" size={24} color={colors.error} />
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     );
   };
 
   if (loading) {
     return (
-      <View style={[globalStyles.loadingContainer, { backgroundColor: colors.background }]}>
+      <View style={[globalStyles.loadingContainer, { backgroundColor: colors.background }]}> 
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={globalStyles.loadingText}>Loading playlist...</Text>
       </View>
@@ -425,16 +304,33 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
 
   if (!playlistId) {
     return (
-      <View style={[globalStyles.loadingContainer, { backgroundColor: colors.background }]}>
+      <View style={[globalStyles.loadingContainer, { backgroundColor: colors.background }]}> 
         <Text style={globalStyles.loadingText}>No playlist selected</Text>
       </View>
     );
   }
 
+  // Delete playlist handler
+  const handleDeletePlaylist = async () => {
+    if (!playlistId) return;
+    setDeletingPlaylist(true);
+    try {
+      await playlistService.deletePlaylist(playlistId);
+      setToast({ visible: true, message: 'Playlist deleted successfully.', type: 'success' });
+      setShowDeletePlaylistModal(false);
+      navigation.goBack();
+    } catch (error) {
+      setToast({ visible: true, message: error?.formattedMessage || 'Failed to delete playlist.', type: 'error' });
+    } finally {
+      setDeletingPlaylist(false);
+      setTimeout(() => setToast({ visible: false }), 3000);
+    }
+  };
+
   return (
-    <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.card }]}>
+    <View style={[globalStyles.container, { backgroundColor: colors.background, flex: 1 }]}> 
+      {/* Header (sticky, outside scroll) */}
+      <View style={[styles.header, { backgroundColor: colors.card }]}> 
         <TouchableOpacity 
           onPress={() => navigation.goBack()} 
           style={styles.backButton}
@@ -446,6 +342,11 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
           <Text style={styles.headerTitle} numberOfLines={1}>
             {selectionMode ? `${selectedItems.length} Selected` : (playlistTitle || playlist?.title)}
           </Text>
+          {!selectionMode && playlist?.description && (
+            <Text style={[styles.headerDescription, { color: colors.textSecondary }]} numberOfLines={2}>
+              {playlist.description}
+            </Text>
+          )}
           {!selectionMode && (
             <Text style={styles.itemCount}>
               {items.length} {items.length === 1 ? 'item' : 'items'}
@@ -459,55 +360,79 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           )}
         </View>
-        {!selectionMode && (
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('EditPlaylist', {
-              playlistId: playlistId,
-              playlistTitle: playlist?.title || playlistTitle,
-              playlistDescription: playlist?.description || ''
-            })}
-            activeOpacity={0.6}
-            style={styles.editButton}
-          >
-            <Ionicons name="create-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
+        {!selectionMode && !playlist?.is_status_playlist && (
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={handleRefresh}
+              activeOpacity={0.6}
+              style={styles.reloadButton}
+            >
+              <Ionicons name="reload" size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EditPlaylist', {
+                playlistId: playlistId,
+                playlistTitle: playlist?.title || playlistTitle,
+                playlistDescription: playlist?.description || '',
+                isStatusPlaylist: playlist?.is_status_playlist || false
+              })}
+              activeOpacity={0.6}
+              style={styles.editButton}
+            >
+              <Ionicons name="create-outline" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowDeletePlaylistModal(true)}
+              activeOpacity={0.6}
+              style={styles.deleteButton}
+            >
+              <Ionicons name="trash-outline" size={22} color={colors.error} />
+            </TouchableOpacity>
+          </View>
         )}
-        <TouchableOpacity 
-          onPress={toggleSelectionMode} 
-          activeOpacity={0.6}
-          style={[
-            styles.selectButton,
-            selectionMode && { backgroundColor: colors.primary }
-          ]}
-        >
-          <Text style={[
-            styles.selectButtonText,
-            selectionMode && { color: '#FFFFFF' }
-          ]}>
-            {selectionMode ? 'DONE' : 'SELECT'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {items.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="film-outline" size={64} color={colors.textSecondary} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            Your playlist is empty
-          </Text>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            Start adding movies and series!
-          </Text>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: colors.primary }]}
-            onPress={() => navigation.navigate('Home')}
-            activeOpacity={0.7}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {selectionMode && selectedItems.length > 0 && (
+            <TouchableOpacity 
+              onPress={handleBulkDelete}
+              activeOpacity={0.7}
+              style={{ marginRight: 8 }}
+            >
+              <Ionicons name="trash" size={22} color={colors.error} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity 
+            onPress={toggleSelectionMode} 
+            activeOpacity={0.6}
+            style={[
+              styles.selectButton,
+              selectionMode && { backgroundColor: colors.primary }
+            ]}
           >
-            <Text style={styles.addButtonText}>Browse TrackR</Text>
+            <Text style={[
+              styles.selectButtonText,
+              selectionMode && { color: '#FFFFFF' }
+            ]}>
+              {selectionMode ? 'DONE' : 'SELECT'}
+            </Text>
           </TouchableOpacity>
         </View>
-      ) : (
-        <>
+      </View>
+      {/* Main scrollable content */}
+      <CustomScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+        {items.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="film-outline" size={64} color={colors.textSecondary} />
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Your playlist is empty</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Start adding movies and series!</Text>
+            <TouchableOpacity
+              style={[styles.addButton, { backgroundColor: colors.primary }]}
+              onPress={() => navigation.navigate('Home')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.addButtonText}>Browse TrackR</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
           <FlatList
             data={items}
             renderItem={renderItem}
@@ -523,73 +448,9 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
           />
-          
-          {/* Bulk Delete Button */}
-          {selectionMode && selectedItems.length > 0 && (
-            <View style={styles.bulkActionContainer}>
-              <TouchableOpacity 
-                style={[styles.bulkDeleteButton, { backgroundColor: colors.error }]}
-                onPress={handleBulkDelete}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash" size={20} color="#FFFFFF" />
-                <Text style={styles.bulkDeleteText}>
-                  Delete {selectedItems.length} {selectedItems.length === 1 ? 'Item' : 'Items'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </>
-      )}
-
-      {/* Status Update Modal */}
-      <Modal
-        visible={showStatusModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowStatusModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Update Status
-            </Text>
-            
-            {['to_watch', 'watching', 'watched'].map((status) => (
-              <TouchableOpacity
-                key={status}
-                style={[
-                  styles.modalOption,
-                  { 
-                    backgroundColor: selectedItem?.status === status ? colors.primary + '20' : 'transparent',
-                    borderBottomColor: colors.border 
-                  }
-                ]}
-                onPress={() => handleUpdateStatus(selectedItem?.movieId, status)}
-                activeOpacity={0.6}
-              >
-                <View style={styles.optionLeft}>
-                  <View style={[styles.statusDot, { backgroundColor: getStatusColor(status) }]} />
-                  <Text style={[styles.optionText, { color: colors.text }]}>
-                    {getStatusText(status)}
-                  </Text>
-                </View>
-                {selectedItem?.status === status && (
-                  <Ionicons name="checkmark" size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            ))}
-            
-            <TouchableOpacity
-              style={[styles.cancelButton, { backgroundColor: colors.border }]}
-              onPress={() => setShowStatusModal(false)}
-              activeOpacity={0.6}
-            >
-              <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        )}
+        {/* Bulk Delete Button removed for better UX */}
+      </CustomScrollView>
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -690,15 +551,15 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Bulk Delete Confirmation Modal */}
+      {/* Bulk Delete Confirmation Modal (now matches single delete style) */}
       <Modal
         visible={showBulkDeleteModal}
         transparent={true}
         animationType="fade"
         onRequestClose={() => setShowBulkDeleteModal(false)}
       >
-        <View style={styles.bulkDeleteModalOverlay}>
-          <View style={[styles.modalContent, styles.bulkDeleteModalContent]}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
             <Ionicons 
               name="warning" 
               size={48} 
@@ -717,10 +578,48 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.modalButtonTextCancel}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: colors.primary }]}
+                style={[styles.modalButton, styles.modalButtonDelete]}
                 onPress={confirmBulkDelete}
               >
-                <Text style={[styles.modalButtonTextDelete, { color: '#FFFFFF' }]}>Delete</Text>
+                <Text style={styles.modalButtonTextDelete}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Playlist Confirmation Modal */}
+      <Modal
+        visible={showDeletePlaylistModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeletePlaylistModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons name="warning" size={48} color={colors.error} style={{ alignSelf: 'center', marginBottom: 16 }} />
+            <Text style={styles.modalTitle}>Delete List</Text>
+            <Text style={styles.deleteModalMessage}>
+              {`Delete "${playlist?.title || playlistTitle || 'this list'}"? This cannot be undone.`}
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowDeletePlaylistModal(false)}
+                disabled={deletingPlaylist}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDelete]}
+                onPress={handleDeletePlaylist}
+                disabled={deletingPlaylist}
+              >
+                {deletingPlaylist ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonTextDelete}>Delete</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -732,7 +631,7 @@ const PlaylistDetailScreen = ({ route, navigation }) => {
         visible={toast.visible}
         message={toast.message}
         type={toast.type}
-        onHide={() => setToast({ ...toast, visible: false })}
+        onHide={hideToast}
       />
     </View>
   );
@@ -763,6 +662,12 @@ const styles = {
     fontWeight: 'bold',
     color: colors.text,
     textAlign: 'center',
+  },
+  headerDescription: {
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   itemCount: {
     fontSize: 12,
@@ -886,13 +791,17 @@ const styles = {
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 40,
+    borderRadius: 20,
+    padding: 32,
+    backgroundColor: colors.card,
+    minWidth: 280,
+    maxWidth: 350,
+    alignItems: 'center',
   },
   modalTitle: {
     fontSize: 18,
@@ -947,9 +856,12 @@ const styles = {
   },
   modalButton: {
     flex: 1,
-    padding: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
   },
   modalButtonCancel: {
     backgroundColor: colors.background,
@@ -986,7 +898,7 @@ const styles = {
     borderRadius: 16,
     padding: 24,
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 350,
     alignItems: 'center',
   },
   ratingModalTitle: {
@@ -1072,15 +984,30 @@ const styles = {
     letterSpacing: 0.5,
   },
   editButton: {
-    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    },
+  deleteButton: {
+    width: 35,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
   },
+  reloadButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   bulkDeleteModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 5)',
     justifyContent: 'center',
     alignItems: 'center',
   },

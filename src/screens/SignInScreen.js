@@ -11,6 +11,7 @@ import {
   Modal,
   Platform
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { authService } from '../services/auth';
 import { globalStyles, colors } from '../styles/globalStyles';
 
@@ -18,6 +19,9 @@ const SignInScreen = ({ navigation }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorModal, setErrorModal] = useState(null);
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+  const [showSignUpRetypePassword, setShowSignUpRetypePassword] = useState(false);
 
   // Sign In State
   const [username, setUsername] = useState('');
@@ -60,7 +64,7 @@ const SignInScreen = ({ navigation }) => {
         { text: 'OK', onPress: () => {
           setErrorModal(null);
           setTimeout(() => {
-            navigation.replace('Playlist');
+            navigation.replace('Home');
           }, 500);
         }}
       ]);
@@ -95,7 +99,7 @@ const SignInScreen = ({ navigation }) => {
           ];
         } else if (error.includes('Invalid') || error.includes('password')) {
           errorTitle = 'Wrong Password';
-          errorMessage = 'The password you entered is incorrect.';
+          errorMessage = 'The password you entered is incorrect. You can try again or reset it.';
           buttons = [
             {
               text: 'Try Again',
@@ -108,7 +112,7 @@ const SignInScreen = ({ navigation }) => {
               text: 'Forgot Password?',
               onPress: () => {
                 setErrorModal(null);
-                showError('Forgot Password', 'Please contact support to reset your password.');
+                handleForgotPassword();
               }
             }
           ];
@@ -132,7 +136,7 @@ const SignInScreen = ({ navigation }) => {
         ];
       } else if (error.response?.status === 401) {
         errorTitle = 'Wrong Password';
-        errorMessage = 'The password you entered is incorrect.';
+        errorMessage = 'The password you entered is incorrect. You can try again or reset it.';
         buttons = [
           {
             text: 'Try Again',
@@ -145,7 +149,7 @@ const SignInScreen = ({ navigation }) => {
             text: 'Forgot Password?',
             onPress: () => {
               setErrorModal(null);
-              showError('Forgot Password', 'Please contact support to reset your password.');
+              handleForgotPassword();
             }
           }
         ];
@@ -167,6 +171,11 @@ const SignInScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = () => {
+    const loginValue = username.trim();
+    navigation.navigate('ResetPassword', { initialLogin: loginValue });
   };
 
   const handleSignUp = async () => {
@@ -206,7 +215,7 @@ const SignInScreen = ({ navigation }) => {
         { text: 'OK', onPress: () => {
           setErrorModal(null);
           setTimeout(() => {
-            navigation.replace('Playlist');
+            navigation.replace('Home');
           }, 500);
         }}
       ]);
@@ -350,32 +359,48 @@ const SignInScreen = ({ navigation }) => {
                 }}
               />
 
-              <TextInput
-                style={styles.input}
-                placeholder="Password (min 8 characters)"
-                placeholderTextColor={colors.textSecondary}
-                value={signUpPassword}
-                onChangeText={setSignUpPassword}
-                secureTextEntry
-                editable={!loading}
-                onSubmitEditing={() => {
-                  if (signUpPassword.length < 8) {
-                    showInputError('Password', 'Must be at least 8 characters');
-                  }
-                }}
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password (min 8 characters)"
+                  placeholderTextColor={colors.textSecondary}
+                  value={signUpPassword}
+                  onChangeText={setSignUpPassword}
+                  secureTextEntry={!showSignUpPassword}
+                  editable={!loading}
+                  onSubmitEditing={() => {
+                    if (signUpPassword.length < 8) {
+                      showInputError('Password', 'Must be at least 8 characters');
+                    }
+                  }}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setShowSignUpPassword(!showSignUpPassword)}
+                >
+                  <Ionicons name={showSignUpPassword ? 'eye' : 'eye-off'} size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
 
-              <TextInput
-                style={styles.input}
-                placeholder="Verify Password"
-                placeholderTextColor={colors.textSecondary}
-                value={retypePassword}
-                onChangeText={setRetypePassword}
-                secureTextEntry
-                editable={!loading}
-                returnKeyType="go"
-                onSubmitEditing={handleSignUp}
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Verify Password"
+                  placeholderTextColor={colors.textSecondary}
+                  value={retypePassword}
+                  onChangeText={setRetypePassword}
+                  secureTextEntry={!showSignUpRetypePassword}
+                  editable={!loading}
+                  returnKeyType="go"
+                  onSubmitEditing={handleSignUp}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setShowSignUpRetypePassword(!showSignUpRetypePassword)}
+                >
+                  <Ionicons name={showSignUpRetypePassword ? 'eye' : 'eye-off'} size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={[styles.authButton, loading && styles.disabledButton]}
@@ -416,22 +441,30 @@ const SignInScreen = ({ navigation }) => {
                 editable={!loading}
                 onSubmitEditing={() => {
                   if (!username.trim()) {
-                    showInputError('Username', 'Username is required');
+                    showInputError('Login', 'Please enter username or email');
                   }
                 }}
               />
 
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor={colors.textSecondary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                editable={!loading}
-                returnKeyType="go"
-                onSubmitEditing={handleSignIn}
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor={colors.textSecondary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showSignInPassword}
+                  editable={!loading}
+                  returnKeyType="go"
+                  onSubmitEditing={handleSignIn}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setShowSignInPassword(!showSignInPassword)}
+                >
+                  <Ionicons name={showSignInPassword ? 'eye' : 'eye-off'} size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={[styles.authButton, loading && styles.disabledButton]}
@@ -441,6 +474,14 @@ const SignInScreen = ({ navigation }) => {
                 <Text style={styles.authButtonText}>
                   {loading ? 'Signing In...' : 'Sign In'}
                 </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.forgotButton}
+                onPress={handleForgotPassword}
+                disabled={loading}
+              >
+                <Text style={styles.forgotButtonText}>Forgot password?</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -511,6 +552,14 @@ const SignInScreen = ({ navigation }) => {
 };
 
 const styles = {
+  eyeIcon: {
+    position: 'absolute',
+    right: 12,
+    top: '50%',
+    transform: [{ translateY: -25 }],
+    paddingVertical: 6,
+    paddingHorizontal: 8, 
+  },
   formContainer: {
     padding: 24,
     marginTop: 50,
@@ -575,6 +624,15 @@ const styles = {
     color: colors.primary,
     fontSize: 14,
     fontWeight: '500',
+  },
+  forgotButton: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  forgotButtonText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   guestSection: {
     borderTopWidth: 1,

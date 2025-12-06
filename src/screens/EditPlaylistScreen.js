@@ -12,16 +12,31 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
 import { playlistService } from '../services/playlistService';
+import Toast from '../components/Toast';
 
 const EditPlaylistScreen = ({ route, navigation }) => {
-  const { playlistId, playlistTitle: initialTitle, playlistDescription: initialDescription } = route?.params || {};
+  const { playlistId, playlistTitle: initialTitle, playlistDescription: initialDescription, isStatusPlaylist } = route?.params || {};
   
   const [listName, setListName] = useState(initialTitle || '');
   const [listDescription, setListDescription] = useState(initialDescription || '');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isSystemPlaylist, setIsSystemPlaylist] = useState(isStatusPlaylist || false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+  const descriptionRef = React.useRef();
+
+  const showToast = (message, type = 'success') => {
+    setToast({ visible: true, message, type });
+  };
 
   useEffect(() => {
+    // Prevent editing if it's a system playlist from params
+    if (isStatusPlaylist) {
+      showToast('System playlists cannot be edited', 'error');
+      setTimeout(() => navigation.goBack(), 1000);
+      return;
+    }
+    
     if (playlistId && !initialTitle) {
       loadPlaylistDetails();
     }
@@ -31,8 +46,17 @@ const EditPlaylistScreen = ({ route, navigation }) => {
     try {
       setLoading(true);
       const playlist = await playlistService.getPlaylist(playlistId);
+      
+      // If system playlist, go back immediately
+      if (playlist.is_status_playlist) {
+        showToast('System playlists cannot be edited', 'error');
+        setTimeout(() => navigation.goBack(), 1000);
+        return;
+      }
+      
       setListName(playlist.title || '');
       setListDescription(playlist.description || '');
+      setIsSystemPlaylist(playlist.is_status_playlist || false);
     } catch (error) {
       console.error('Error loading playlist:', error);
       Alert.alert('Error', 'Failed to load playlist details');
@@ -53,13 +77,19 @@ const EditPlaylistScreen = ({ route, navigation }) => {
         title: listName.trim(),
         description: listDescription.trim()
       });
-      
-      Alert.alert('Success', 'Playlist updated successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+
+      showToast('Playlist updated successfully!', 'success');
+      setTimeout(() => {
+        navigation.navigate('PlaylistDetail', {
+          playlistId,
+          playlistTitle: listName.trim(),
+          playlistDescription: listDescription.trim(),
+          reload: true
+        });
+      }, 1000);
     } catch (error) {
       console.error('Error updating playlist:', error);
-      Alert.alert('Error', error.formattedMessage || 'Failed to update playlist');
+      showToast(error.formattedMessage || 'Failed to update playlist', 'error');
     } finally {
       setSaving(false);
     }
@@ -126,6 +156,14 @@ const EditPlaylistScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Toast Notification */}
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
     </View>
   );
 };

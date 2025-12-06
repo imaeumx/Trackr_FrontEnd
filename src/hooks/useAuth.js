@@ -13,9 +13,10 @@ export const useAuth = () => {
     const initializeAuth = async () => {
       try {
         setIsInitializing(true);
-        console.log('Initializing auth state...');
         const isAuthenticated = await authService.initialize();
-        console.log('Auth initialization result:', isAuthenticated);
+        const user = authService.getCurrentUser ? authService.getCurrentUser() : null;
+        setIsLoggedIn(!!user);
+        setCurrentUser(user);
       } catch (error) {
         console.error('Error initializing auth:', error);
       } finally {
@@ -28,7 +29,6 @@ export const useAuth = () => {
 
     // Listen for auth changes
     const handleAuthChange = (isAuthenticated, user) => {
-      console.log('useAuth: Auth state changed:', isAuthenticated, user);
       setIsLoggedIn(isAuthenticated);
       setCurrentUser(user);
       setAuthChecked(true);

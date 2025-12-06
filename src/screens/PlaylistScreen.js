@@ -42,6 +42,15 @@ const PlaylistScreen = ({ navigation }) => {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (isLoggedIn) {
+        loadPlaylists();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, isLoggedIn]);
+
+  useEffect(() => {
     checkAuthStatus();
   }, []);
 
@@ -74,6 +83,34 @@ const PlaylistScreen = ({ navigation }) => {
     } finally {
       setAuthChecked(true);
     }
+  };
+
+  const statusOrderLower = ['to watch', 'watching', 'watched'];
+
+  const sortPlaylists = (arr) => {
+    const normalizeTitle = (t = '') => t.trim().toLowerCase();
+
+    const sorted = [...arr].sort((a, b) => {
+      const aTitleNorm = normalizeTitle(a.title);
+      const bTitleNorm = normalizeTitle(b.title);
+      const aStatusIdx = statusOrderLower.indexOf(aTitleNorm);
+      const bStatusIdx = statusOrderLower.indexOf(bTitleNorm);
+      const aIsStatus = aStatusIdx !== -1;
+      const bIsStatus = bStatusIdx !== -1;
+
+      // Pin main status playlists at top: To Watch, Watching, Watched
+      if (aIsStatus && !bIsStatus) return -1;
+      if (!aIsStatus && bIsStatus) return 1;
+      if (aIsStatus && bIsStatus) return aStatusIdx - bStatusIdx;
+
+      // For everything else (including "Did Not Finish"), sort by update time
+      const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+      const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+      if (bTime !== aTime) return bTime - aTime;
+      return aTitleNorm.localeCompare(bTitleNorm);
+    });
+
+    return sorted;
   };
 
   const loadPlaylists = async () => {
@@ -144,7 +181,9 @@ const PlaylistScreen = ({ navigation }) => {
 
       // Load playlists from API
       const playlistsData = await playlistService.getPlaylists();
-      setPlaylists(Array.isArray(playlistsData) ? playlistsData : (playlistsData.results || []));
+      const arr = Array.isArray(playlistsData) ? playlistsData : (playlistsData.results || []);
+      const sorted = sortPlaylists(arr);
+      setPlaylists(sorted);
 
     } catch (error) {
       console.error('Error loading playlists:', error);
@@ -162,6 +201,15 @@ const PlaylistScreen = ({ navigation }) => {
     loadPlaylists();
   };
 
+  const getFilteredLists = () => {
+    if (!searchQuery.trim()) {
+      return playlists;
+    }
+    return playlists.filter(list =>
+      list.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
@@ -169,8 +217,6 @@ const PlaylistScreen = ({ navigation }) => {
       Alert.alert('Sign In Required', 'Please sign in to search playlists.');
       return;
     }
-
-    Alert.alert('Search', `Searching for: ${searchQuery}`);
   };
 
   const handleProfilePress = () => {
@@ -234,6 +280,13 @@ const PlaylistScreen = ({ navigation }) => {
   };
 
   const togglePlaylistSelection = (playlistId) => {
+    // Find the playlist to check if it's a system playlist
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (playlist?.is_status_playlist) {
+      showToast('System playlists cannot be deleted', 'error');
+      return;
+    }
+    
     if (selectedPlaylists.includes(playlistId)) {
       setSelectedPlaylists(selectedPlaylists.filter(id => id !== playlistId));
     } else {
@@ -247,10 +300,13 @@ const PlaylistScreen = ({ navigation }) => {
   };
 
   const selectAll = () => {
-    if (selectedPlaylists.length === playlists.length) {
+    // Filter out system playlists from selection
+    const selectablePlaylists = playlists.filter(p => !p.is_status_playlist);
+    
+    if (selectedPlaylists.length === selectablePlaylists.length) {
       setSelectedPlaylists([]);
     } else {
-      setSelectedPlaylists(playlists.map(list => list.id));
+      setSelectedPlaylists(selectablePlaylists.map(list => list.id));
     }
   };
 
@@ -362,6 +418,7 @@ const PlaylistScreen = ({ navigation }) => {
 
   const renderPlaylistItem = ({ item }) => {
     const isSelected = selectedPlaylists.includes(item.id);
+    const isSystemPlaylist = item.is_status_playlist;
     
     const handleDeletePress = () => {
       console.log('=== DELETE BUTTON PRESSED ===');
@@ -376,7 +433,11 @@ const PlaylistScreen = ({ navigation }) => {
         return;
       }
       
-      console.log('Opening delete confirmation modal');
+      if (isSystemPlaylist) {
+        showToast('System playlists cannot be deleted', 'error');
+        return;
+      }
+      
       setPlaylistToDelete(item);
       setDeleteModalVisible(true);
     };
@@ -386,7 +447,7 @@ const PlaylistScreen = ({ navigation }) => {
         styles.playlistCard,
         isSelected && { borderLeftWidth: 4, borderLeftColor: colors.primary }
       ]}>
-        {selectionMode && (
+        {selectionMode && !isSystemPlaylist && (
           <View style={styles.checkbox}>
             <Ionicons 
               name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
@@ -395,13 +456,24 @@ const PlaylistScreen = ({ navigation }) => {
             />
           </View>
         )}
+        {selectionMode && isSystemPlaylist && (
+          <View style={styles.checkbox}>
+            <Ionicons 
+              name="lock-closed" 
+              size={20} 
+              color={colors.textSecondary} 
+            />
+          </View>
+        )}
         <TouchableOpacity
           style={styles.playlistCardTouchable}
           onPress={() => handlePlaylistPress(item)}
           onLongPress={() => {
-            if (!selectionMode) {
+            if (!selectionMode && !isSystemPlaylist) {
               setSelectionMode(true);
               togglePlaylistSelection(item.id);
+            } else if (selectionMode && isSystemPlaylist) {
+              showToast('System playlists cannot be deleted', 'error');
             }
           }}
         >
@@ -409,7 +481,9 @@ const PlaylistScreen = ({ navigation }) => {
             <Ionicons name="list" size={24} color={colors.primary} />
           </View>
           <View style={styles.playlistInfo}>
-            <Text style={styles.playlistTitle}>{item.title}</Text>
+            <Text style={styles.playlistTitle}>
+              {item.title}
+            </Text>
             <Text style={styles.playlistDescription}>
               {item.description || 'No description'}
             </Text>
@@ -496,7 +570,7 @@ const PlaylistScreen = ({ navigation }) => {
         isLoggedIn={isLoggedIn}
         currentUser={currentUser}
         onProfilePress={handleProfilePress}
-        searchPlaceholder={isLoggedIn ? "Search playlists..." : "Sign in to search..."}
+        searchPlaceholder={isLoggedIn ? "Search watchlist..." : "Sign in to search..."}
         searchEditable={isLoggedIn}
       />
 
@@ -531,6 +605,13 @@ const PlaylistScreen = ({ navigation }) => {
                 <Text style={globalStyles.sectionTitle}>Your Lists ({playlists.length})</Text>
                 {playlists.length > 0 && (
                   <View style={styles.selectionControls}>
+                    <TouchableOpacity onPress={handleRefresh}>
+                      <Ionicons 
+                        name="reload" 
+                        size={20} 
+                        color={colors.text} 
+                      />
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={toggleSelectionMode}>
                       <Ionicons 
                         name={selectionMode ? "close-circle" : "checkmark-circle-outline"} 
@@ -549,12 +630,22 @@ const PlaylistScreen = ({ navigation }) => {
                 )}
               </View>
               {playlists.length > 0 ? (
-                <FlatList
-                  data={playlists}
-                  renderItem={renderPlaylistItem}
-                  keyExtractor={item => item.id.toString()}
-                  scrollEnabled={false}
-                />
+                <>
+                  {getFilteredLists().length > 0 ? (
+                    <FlatList
+                      data={getFilteredLists()}
+                      renderItem={renderPlaylistItem}
+                      keyExtractor={item => item.id.toString()}
+                      scrollEnabled={true}
+                    />
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="list" size={48} color={colors.textSecondary} />
+                      <Text style={styles.emptyTitle}>No playlists found</Text>
+                      <Text style={styles.emptySubtitle}>No matching playlists</Text>
+                    </View>
+                  )}
+                </>
               ) : (
                 <View style={styles.emptyState}>
                   <Ionicons name="list" size={48} color={colors.textSecondary} />
@@ -947,6 +1038,7 @@ const styles = {
   },
   checkbox: {
     marginRight: 12,
+    paddingLeft: 7,
   },
   deleteButton: {
     flexDirection: 'row',

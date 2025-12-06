@@ -116,8 +116,13 @@ export const clearDemoData = () => {
 // Add token to requests if available
 api.interceptors.request.use(
   (config) => {
+    console.log('[API Interceptor] Request to:', config.url);
+    console.log('[API Interceptor] Current authToken:', authToken ? `${authToken.substring(0, 10)}...` : 'NO TOKEN');
     if (authToken) {
       config.headers.Authorization = `Token ${authToken}`;
+      console.log('[API Interceptor] Authorization header set');
+    } else {
+      console.warn('[API Interceptor] NO AUTH TOKEN AVAILABLE');
     }
     return config;
   },
@@ -128,10 +133,19 @@ api.interceptors.request.use(
 
 // Response interceptor for better error handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('[API Response] Success:', response.status, response.config.url);
+    return response;
+  },
   (error) => {
+    console.error('[API Error] Status:', error.response?.status);
+    console.error('[API Error] URL:', error.config?.url);
+    console.error('[API Error] Data:', error.response?.data);
+    console.error('[API Error] Message:', error.message);
+    
     if (error.response?.status === 401) {
       // Token expired or invalid
+      console.warn('[API Error] 401 Unauthorized - clearing token');
       setAuthToken(null);
       setCurrentUser(null);
       
@@ -155,7 +169,11 @@ api.interceptors.response.use(
         } else {
           // Get first error message from object
           const firstKey = Object.keys(error.response.data)[0];
-          error.formattedMessage = `${firstKey}: ${error.response.data[firstKey][0]}`;
+          if (Array.isArray(error.response.data[firstKey])) {
+            error.formattedMessage = `${firstKey}: ${error.response.data[firstKey][0]}`;
+          } else {
+            error.formattedMessage = `${firstKey}: ${error.response.data[firstKey]}`;
+          }
         }
       } else {
         error.formattedMessage = JSON.stringify(error.response.data);

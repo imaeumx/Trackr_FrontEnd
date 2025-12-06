@@ -161,37 +161,12 @@ const HelpSupportScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Contact Methods */}
-        <View style={styles.contactSection}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Get in Touch
-          </Text>
-          {contactMethods.map((method) => (
-            <TouchableOpacity
-              key={method.id}
-              style={[styles.contactItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}
-              onPress={method.action}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: colors.background }]}>
-                <Ionicons name={method.icon} size={24} color={colors.primary} />
-              </View>
-              <View style={styles.contactInfo}>
-                <Text style={[styles.contactTitle, { color: colors.text }]}>{method.title}</Text>
-                <Text style={[styles.contactSubtitle, { color: colors.textSecondary }]}>
-                  {method.subtitle}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          ))}
-        </View>
-
         {/* App Info */}
         <View style={[styles.appInfo, { backgroundColor: colors.card }]}>
           <Text style={[styles.appInfoTitle, { color: colors.text }]}>TrackR</Text>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>Version 1.0.0</Text>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>
-            © 2025 TrackR. All rights reserved.
+            © 2025 TrackR Trio. All rights reserved.
           </Text>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>
             Movie data provided by TMDB

@@ -71,11 +71,7 @@ const SearchDropdown = ({
           showsVerticalScrollIndicator={true}
           nestedScrollEnabled={true}
         />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No results found</Text>
-        </View>
-      )}
+      ) : null}
     </View>
   );
 };

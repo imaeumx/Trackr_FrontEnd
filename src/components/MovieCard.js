@@ -69,7 +69,7 @@ const MovieCard = ({
             { backgroundColor: item.type === 'movie' ? colors.primary : colors.secondary }
           ]}>
             <Text style={globalStyles.typeText}>
-              {item.type === 'movie' ? 'MOVIE' : 'SERIES'}
+              {item.type === 'movie' ? 'FILM' : 'SERIES'}
             </Text>
           </View>
           {showLocalBadge && item.isLocal && (
@@ -93,20 +93,20 @@ const MovieCard = ({
       {item.showAddToList && (
         <TouchableOpacity
           style={{ 
-            marginTop: 6, 
+            marginTop: 8, 
             flexDirection: 'row', 
             alignItems: 'center',
             backgroundColor: colors.primary,
             paddingVertical: 4,
-            paddingHorizontal: 8,
-            borderRadius: 4,
+            paddingHorizontal: 12,
+            borderRadius: 6,
             justifyContent: 'center'
           }}
           onPress={handleAddToList}
           activeOpacity={0.6}
         >
-          <Ionicons name="add" size={12} color="#fff" />
-          <Text style={{ color: '#fff', marginLeft: 4, fontSize: 10, fontWeight: '600' }}>
+          <Ionicons name="add" size={17} color="#fff" />
+          <Text style={{ color: '#fff', marginLeft: 6, fontSize: 12, fontWeight: '600' }}>
             Add to List
           </Text>
         </TouchableOpacity>

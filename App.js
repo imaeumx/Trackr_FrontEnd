@@ -17,6 +17,8 @@ import MovieDetailScreen from './src/screens/MovieDetailScreen';
 import SearchResultsScreen from './src/screens/SearchResultsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import HelpSupportScreen from './src/screens/HelpSupportScreen';
+import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import CreateListScreen from './src/screens/CreateListScreen';
 import EditPlaylistScreen from './src/screens/EditPlaylistScreen';
 import MyListsScreen from './src/screens/MyListsScreen';
@@ -46,7 +48,7 @@ const App = () => {
         // Load last visited route from localStorage
         try {
           const savedRoute = localStorage?.getItem('lastVisitedRoute');
-          const validRoutes = ['Home', 'Films', 'Series', 'Playlist', 'Profile', 'MyLists', 'HelpSupport'];
+          const validRoutes = ['Home', 'Films', 'Series', 'Playlist', 'Watchlist', 'Profile', 'MyLists', 'HelpSupport', 'ChangePassword', 'ResetPassword'];
           
           if (savedRoute && validRoutes.includes(savedRoute)) {
             console.log('App: Restoring last visited route:', savedRoute);
@@ -96,7 +98,7 @@ const App = () => {
           console.log('App: Route changed from', previousRouteName, 'to', currentRouteName);
           
           // Only save routes that don't require parameters to localStorage
-          const routesWithoutParams = ['Home', 'Films', 'Series', 'Playlist', 'Profile', 'MyLists', 'HelpSupport'];
+          const routesWithoutParams = ['Home', 'Films', 'Series', 'Playlist', 'Watchlist', 'Profile', 'MyLists', 'HelpSupport', 'ChangePassword', 'ResetPassword'];
           
           if (routesWithoutParams.includes(currentRouteName)) {
             try {
@@ -135,13 +137,20 @@ const App = () => {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Films" component={FilmsScreen} />
         <Stack.Screen name="Series" component={SeriesScreen} />
-        <Stack.Screen name="Playlist" component={PlaylistScreen} />
+        <Stack.Screen name="Playlist">
+          {props => <PlaylistScreen {...props} showReloadIcon={true} />}
+        </Stack.Screen>
+        <Stack.Screen name="Watchlist">
+          {props => <PlaylistScreen {...props} showReloadIcon={true} />}
+        </Stack.Screen>
         <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
         <Stack.Screen name="Sign In" component={SignInScreen} />
         <Stack.Screen name="MovieDetail" component={MovieDetailScreen} />
         <Stack.Screen name="SearchResults" component={SearchResultsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         <Stack.Screen name="CreateList" component={CreateListScreen} />
         <Stack.Screen name="EditPlaylist" component={EditPlaylistScreen} />
         <Stack.Screen name="MyLists" component={MyListsScreen} />

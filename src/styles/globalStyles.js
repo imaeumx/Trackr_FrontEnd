@@ -347,6 +347,7 @@ export const globalStyles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     fontStyle: 'italic',
+    padding: 10,
   },
 
   bottomPadding: {

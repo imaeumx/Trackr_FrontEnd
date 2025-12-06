@@ -118,11 +118,14 @@ export const movieService = {
         throw new Error('TMDB ID is required');
       }
 
+      console.log('[movieService.getOrCreateMovie] Sending TMDB ID:', tmdbId, 'mediaType:', mediaType);
+      
       const response = await api.post('/movies/get_or_create/', {
         tmdb_id: parseInt(tmdbId),
         media_type: mediaType
       });
       
+      console.log('[movieService.getOrCreateMovie] Response:', JSON.stringify(response.data, null, 2));
       return response.data;
     } catch (error) {
       console.error('Get or create movie error:', error);
@@ -307,6 +310,25 @@ export const movieService = {
     } catch (error) {
       console.error('Get TV trailers error:', error);
       return null;
+    }
+  },
+
+  // Update a movie's media type
+  async updateMediaType(movieId, mediaType) {
+    try {
+      if (!movieId || !mediaType) {
+        throw new Error('Movie ID and media type are required');
+      }
+
+      const response = await api.patch(`/movies/${movieId}/update_media_type/`, {
+        media_type: mediaType
+      });
+      
+      console.log(`[movieService] Updated movie ${movieId} media_type to ${mediaType}`);
+      return response.data;
+    } catch (error) {
+      console.error('Update media type error:', error);
+      throw error.response?.data || error.message || 'Failed to update media type';
     }
   }
 };

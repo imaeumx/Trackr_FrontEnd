@@ -12,14 +12,21 @@ import {
   Modal,
   FlatList,
   TextInput,
-  StyleSheet
+  StyleSheet,
+  Platform
 } from 'react-native';
+import DecisionModal from '../components/DecisionModal';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { globalStyles, colors } from '../styles/globalStyles';
 import CustomScrollView from '../components/CustomScrollView';
+import Toast from '../components/Toast';
 import { movieService } from '../services/movieService';
 import { playlistService } from '../services/playlistService';
+import { reviewService } from '../services/reviewService';
+import { favoriteService } from '../services/favoriteService';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../hooks/useToast';
 
 const MovieDetailScreen = ({ route, navigation }) => {
   const { movie: movieParam, movieId, mediaType, tmdbId } = route.params || {};
@@ -29,6 +36,7 @@ const MovieDetailScreen = ({ route, navigation }) => {
   const [error, setError] = useState(null);
   const [userRating, setUserRating] = useState(0);
   const [watchStatus, setWatchStatus] = useState('');
+  const prevTmdbIdRef = React.useRef(null);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [playlists, setPlaylists] = useState([]);
   const [newPlaylistName, setNewPlaylistName] = useState('');
@@ -37,8 +45,26 @@ const MovieDetailScreen = ({ route, navigation }) => {
   const [loadingPlaylists, setLoadingPlaylists] = useState(false);
   const [trailerUrl, setTrailerUrl] = useState(null);
   const [loadingTrailer, setLoadingTrailer] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewText, setReviewText] = useState('');
+  const [userReview, setUserReview] = useState(null);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [loadingFavorite, setLoadingFavorite] = useState(false);
+  const { toast, showToast, hideToast } = useToast();
+  const playlistDescRef = React.useRef();
   
   const { isLoggedIn } = useAuth();
+
+  const resolveTmdbId = () =>
+    tmdbId || movieDetails?.tmdb_id || movieDetails?.id || movie?.tmdb_id || movie?.id || movieParam?.id;
+
+  const resolveMediaType = () => {
+    const type = mediaType || movieDetails?.type || movie?.type || movieParam?.type;
+    const normalized = typeof type === 'string' ? type.toLowerCase() : '';
+    // Check for variations of series/tv type
+    return normalized === 'tv' || normalized === 'series' || normalized === 'tv show' ? 'tv' : 'movie';
+  };
 
   useEffect(() => {
     const loadMovieDetails = async () => {
@@ -82,6 +108,7 @@ const MovieDetailScreen = ({ route, navigation }) => {
             vote_count: tv.vote_count || 0,
             seasons: tv.number_of_seasons || 0,
             episodes: tv.number_of_episodes || 0,
+            seasonsInfo: tv.seasons || [],
           });
         } else {
           const m = await movieService.getMovieDetails(tmdb);
@@ -120,11 +147,181 @@ const MovieDetailScreen = ({ route, navigation }) => {
     loadMovieDetails();
   }, [movieParam, movieId, mediaType, tmdbId]);
 
-  // Fetch trailer after movie details are loaded
+  // Open review modal if requested from navigation (e.g., Profile screen tap)
   useEffect(() => {
-    if (!movieDetails) return;
+    if (route.params?.openReviewModal && movieDetails) {
+      setShowReviewModal(true);
+      navigation.setParams({ ...route.params, openReviewModal: false });
+    }
+  }, [route.params?.openReviewModal, movieDetails]);
 
+  // Check if movie is favorited
+  useEffect(() => {
+    const checkFavorite = async () => {
+      if (!isLoggedIn || !movieDetails) return;
+      
+      try {
+        const tmdb = resolveTmdbId();
+        if (!tmdb) return;
+        
+        const result = await favoriteService.checkFavorite(tmdb);
+        setIsFavorite(result.is_favorite || false);
+      } catch (error) {
+        console.error('Failed to check favorite status:', error);
+      }
+    };
+
+    checkFavorite();
+  }, [isLoggedIn, movieDetails]);
+
+  // Load watch status from playlists
+  useEffect(() => {
+    const loadWatchStatus = async () => {
+      if (!isLoggedIn) return;
+
+      try {
+        const tmdbId = resolveTmdbId();
+        if (!tmdbId) {
+          setWatchStatus('');
+          return;
+        }
+
+        // Get all playlists
+        const playlistsResponse = await playlistService.getPlaylists();
+        const allPlaylists = Array.isArray(playlistsResponse) 
+          ? playlistsResponse 
+          : (playlistsResponse.results || []);
+
+        // Check which status playlist contains this movie
+        const statusPlaylists = ['Watched', 'Watching', 'To Watch', 'Did Not Finish'];
+        
+        for (const playlistName of statusPlaylists) {
+          const playlist = allPlaylists.find(p => p.title === playlistName && p.is_status_playlist);
+          if (playlist) {
+            const itemsResponse = await playlistService.getPlaylistItems(playlist.id);
+            const items = Array.isArray(itemsResponse) 
+              ? itemsResponse 
+              : (itemsResponse.results || []);
+            
+            // Check if this movie is in this playlist (using both ID and TMDB ID)
+            const isInPlaylist = items.some(item => 
+              item.movie?.id === movieDetails?.id || 
+              item.movie?.tmdb_id === tmdbId ||
+              item.movie?.id === movie?.id
+            );
+            
+            if (isInPlaylist) {
+              setWatchStatus(playlistName);
+              return; // Found the status, exit
+            }
+          }
+        }
+        
+        // Not in any status playlist
+        setWatchStatus('');
+      } catch (error) {
+        console.error('[MovieDetailScreen] Failed to load watch status:', error);
+      }
+    };
+
+    loadWatchStatus();
+  }, [isLoggedIn, movieDetails]);
+
+  // Reload watch status when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const reloadStatus = async () => {
+        if (!isLoggedIn) {
+          setWatchStatus('');
+          return;
+        }
+
+        try {
+          const currentTmdbId = resolveTmdbId();
+          
+          // Only reload if we're looking at a different movie
+          if (prevTmdbIdRef.current !== currentTmdbId) {
+            prevTmdbIdRef.current = currentTmdbId;
+            
+            if (!currentTmdbId) {
+              setWatchStatus('');
+              return;
+            }
+
+            // Get all playlists
+            const playlistsResponse = await playlistService.getPlaylists();
+            const allPlaylists = Array.isArray(playlistsResponse) 
+              ? playlistsResponse 
+              : (playlistsResponse.results || []);
+
+            // Check each status playlist
+            for (const playlistName of ['Watched', 'Watching', 'To Watch', 'Did Not Finish']) {
+              const playlist = allPlaylists.find(p => p.title === playlistName && p.is_status_playlist);
+              if (!playlist) continue;
+
+              const itemsResponse = await playlistService.getPlaylistItems(playlist.id);
+              const items = Array.isArray(itemsResponse) 
+                ? itemsResponse 
+                : (itemsResponse.results || []);
+              
+              // Check if movie is in this playlist
+              const found = items.some(item => 
+                item.movie?.id === movieDetails?.id || 
+                item.movie?.tmdb_id === currentTmdbId ||
+                item.movie?.id === movie?.id
+              );
+
+              if (found) {
+                setWatchStatus(playlistName);
+                return;
+              }
+            }
+
+            setWatchStatus('');
+          }
+        } catch (error) {
+          console.error('Failed to reload watch status:', error);
+        }
+      };
+
+      reloadStatus();
+      
+      // Cleanup
+      return () => {
+        // Reset on screen blur
+      };
+    }, [isLoggedIn, movieDetails, movie])
+  );
+
+  // Reload favorite status when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const checkFavoriteStatus = async () => {
+        if (!isLoggedIn || !movieDetails) return;
+
+        try {
+          const tmdb = resolveTmdbId();
+          if (!tmdb) return;
+
+          const result = await favoriteService.checkFavorite(tmdb);
+          setIsFavorite(result.is_favorite || false);
+        } catch (error) {
+          console.error('Failed to check favorite status:', error);
+        }
+      };
+
+      checkFavoriteStatus();
+
+      return () => {
+        // Cleanup if needed
+      };
+    }, [isLoggedIn, movieDetails])
+  );
+
+  // Fetch trailer URL
+  useEffect(() => {
     const fetchTrailer = async () => {
+      if (!movieDetails) return;
       setLoadingTrailer(true);
       try {
         const tmdb = tmdbId || movieId || movieParam?.id || movieDetails?.id;
@@ -152,24 +349,48 @@ const MovieDetailScreen = ({ route, navigation }) => {
     fetchTrailer();
   }, [movieDetails]);
 
-  const handleAddToList = async () => {
+  // Load reviews when movie changes
+  useEffect(() => {
+    if (!movieDetails?.id && !movie?.id) return;
+
+    const loadReviews = async () => {
+      try {
+        const tmdbIdentifier = resolveTmdbId();
+        const mediaType = resolveMediaType();
+        if (!tmdbIdentifier) return;
+
+        // Only load user's review (privacy-focused)
+        if (isLoggedIn) {
+          const review = await reviewService.getUserReview({ tmdbId: tmdbIdentifier, mediaType });
+          if (review) {
+            setUserReview(review);
+            setUserRating(review.rating);
+            setReviewText(review.review_text);
+          } else {
+            // Reset review state if no review found
+            setUserReview(null);
+            setUserRating(0);
+            setReviewText('');
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user review:', error);
+      }
+    };
+
+    loadReviews();
+  }, [movieDetails, movie, isLoggedIn]);
+
+  const handleAddToList = async (statusKey = null) => {
     // Check if user is logged in
     if (!isLoggedIn) {
-      Alert.alert(
-        'Sign In Required',
-        'You need to sign in to add movies to your list',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Sign In', 
-            onPress: () => navigation.navigate('Sign In')
-          }
-        ]
-      );
+      showToast('Please sign in to add movies to your list', 'error');
+      navigation.navigate('Sign In');
       return;
     }
 
-    // Fetch user's playlists
+    // Fetch user's playlists and open modal for selection
+    // Users can add to any playlist they want, including status playlists
     try {
       setLoadingPlaylists(true);
       const playlistsResponse = await playlistService.getPlaylists();
@@ -179,12 +400,36 @@ const MovieDetailScreen = ({ route, navigation }) => {
         ? playlistsResponse 
         : (playlistsResponse.results || []);
       
+      // Sort playlists: pin To Watch/Watching/Watched, then user lists + Did Not Finish by updated_at
+      const pinnedStatusOrder = ['To Watch', 'Watching', 'Watched'];
+      const sortedPlaylists = [...userPlaylists].sort((a, b) => {
+        // Check if item is a pinned status playlist
+        const aIsPinned = pinnedStatusOrder.includes(a.title);
+        const bIsPinned = pinnedStatusOrder.includes(b.title);
+        
+        // Pinned playlists come first, in their defined order
+        if (aIsPinned && !bIsPinned) return -1;
+        if (!aIsPinned && bIsPinned) return 1;
+        
+        // If both are pinned, sort by their position in pinnedStatusOrder
+        if (aIsPinned && bIsPinned) {
+          const aIdx = pinnedStatusOrder.indexOf(a.title);
+          const bIdx = pinnedStatusOrder.indexOf(b.title);
+          return aIdx - bIdx;
+        }
+        
+        // For unpinned (Did Not Finish + user lists), sort by updated_at (most recent first)
+        const aTime = new Date(a.updated_at).getTime();
+        const bTime = new Date(b.updated_at).getTime();
+        return bTime - aTime;
+      });
+      
       // Show modal even if no playlists - user can create one
-      setPlaylists(userPlaylists);
+      setPlaylists(sortedPlaylists);
       setShowPlaylistModal(true);
     } catch (error) {
       console.error('Error fetching playlists:', error);
-      Alert.alert('Error', 'Failed to load playlists. Please try again.');
+      showToast('Failed to load playlists. Please try again.', 'error');
     } finally {
       setLoadingPlaylists(false);
     }
@@ -196,7 +441,7 @@ const MovieDetailScreen = ({ route, navigation }) => {
       
       // Get TMDB ID and media type from movieDetails
       const tmdbId = movieDetails?.id || movieDetails?.tmdb_id;
-      const mediaType = movieDetails?.type === 'series' ? 'tv' : 'movie';
+      const mediaType = (movieDetails?.type === 'series' || movieDetails?.type === 'tv') ? 'tv' : 'movie';
       
       if (!tmdbId) {
         Alert.alert('Error', 'Movie information is missing. Please try again.');
@@ -245,7 +490,7 @@ const MovieDetailScreen = ({ route, navigation }) => {
 
       if (movieDetails) {
         const tmdbId = movieDetails.id || movieDetails.tmdb_id;
-        const mediaType = movieDetails.type === 'series' ? 'tv' : 'movie';
+        const mediaType = movieDetails.type === 'Series' ? 'tv' : 'movie';
         const createdMovie = await movieService.getOrCreateMovie(tmdbId, mediaType);
         await playlistService.addMovieToPlaylist(newPlaylist.id, createdMovie.id, 'to_watch');
       }
@@ -268,9 +513,109 @@ const MovieDetailScreen = ({ route, navigation }) => {
     Alert.alert('Rating Added', `You rated this ${rating} stars`);
   };
 
-  const handleSetStatus = (status) => {
-    setWatchStatus(status);
-    Alert.alert('Status Updated', `Marked as ${status}`);
+  const handleSetStatus = async (status) => {
+    if (!isLoggedIn) {
+      showToast('Please sign in to update status', 'error');
+      navigation.navigate('Sign In');
+      return;
+    }
+
+    const statusMap = {
+      Watched: 'watched',
+      Watching: 'watching',
+      'To Watch': 'to_watch',
+      'Did Not Finish': 'did_not_finish',
+      watched: 'watched',
+      watching: 'watching',
+      to_watch: 'to_watch',
+      did_not_finish: 'did_not_finish'
+    };
+
+    const statusPlaylistNames = {
+      'watched': 'Watched',
+      'watching': 'Watching',
+      'to_watch': 'To Watch',
+      'did_not_finish': 'Did Not Finish'
+    };
+
+    const statusKey = statusMap[status];
+    const displayStatus = statusKey ? (statusPlaylistNames[statusKey] || status) : status;
+
+    if (!statusKey) {
+      showToast('Invalid watch status', 'error');
+      return;
+    }
+
+    // Set the watch status immediately to update UI
+    setWatchStatus(displayStatus);
+    
+    // Auto-move to the corresponding status playlist
+    try {
+      setLoadingPlaylists(true);
+      const targetPlaylistName = statusPlaylistNames[statusKey];
+
+      // Fetch ALL playlists to find status playlists
+      const playlistsResponse = await playlistService.getPlaylists();
+      const allPlaylists = Array.isArray(playlistsResponse)
+        ? playlistsResponse
+        : (playlistsResponse.results || []);
+
+      const statusPlaylists = allPlaylists.filter(p => p.is_status_playlist);
+      const targetPlaylist = statusPlaylists.find(p => p.title === targetPlaylistName);
+      const fallbackPlaylist = statusPlaylists[0];
+
+      if (!targetPlaylist && !fallbackPlaylist) {
+        showToast('Status playlist not found', 'error');
+        return;
+      }
+
+      const tmdbId = movieDetails?.id || movieDetails?.tmdb_id;
+      const mediaType = (movieDetails?.type === 'series' || movieDetails?.type === 'tv') ? 'tv' : 'movie';
+
+      if (!tmdbId) {
+        showToast('Movie information is missing', 'error');
+        return;
+      }
+
+      // Get or create movie in backend
+      const createdMovie = await movieService.getOrCreateMovie(tmdbId, mediaType);
+
+      // Remove from all status playlists first
+      for (const playlist of statusPlaylists) {
+        try {
+          await playlistService.removeMovieFromPlaylist(playlist.id, createdMovie.id);
+        } catch (err) {
+          // Ignore errors if not present
+        }
+      }
+
+      // Add to the target status playlist
+      const playlistForMove = targetPlaylist || fallbackPlaylist;
+      await playlistService.addMovieToPlaylist(playlistForMove.id, createdMovie.id, statusKey);
+
+      const successMessage = statusKey === 'did_not_finish' ? 'Marked as Did Not Finish' : `Moved to ${targetPlaylistName}`;
+      showToast(successMessage, 'success');
+
+    } catch (error) {
+      console.error('Error updating watch status:', error);
+      // If the movie is already in the target playlist, just update UI - that's fine
+      if (error?.response?.data?.error === 'Film already in playlist' ||
+          error?.error?.includes('already in playlist') ||
+          error?.formattedMessage?.includes('already in playlist')) {
+        showToast(`Set to ${displayStatus}`, 'info');
+      } else {
+        showToast('Failed to update watch status', 'error');
+      }
+    } finally {
+      setLoadingPlaylists(false);
+    }
+
+    // If status is "Watched", prompt user to rate after a delay
+    if (status === 'Watched') {
+      setTimeout(() => {
+        setShowReviewModal(true);
+      }, 1000);
+    }
   };
 
   const formatRuntime = (minutes) => {
@@ -290,6 +635,253 @@ const MovieDetailScreen = ({ route, navigation }) => {
     }).format(amount);
   };
 
+  const handleSubmitReview = async () => {
+    if (!isLoggedIn) {
+      showToast('Please sign in to leave a review', 'error');
+      navigation.navigate('Sign In');
+      return;
+    }
+
+    if (userRating === 0) {
+      showToast('Please select a rating', 'error');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const tmdbIdentifier = resolveTmdbId();
+      const type = resolveMediaType();
+
+      if (!tmdbIdentifier) {
+        showToast('Film information is missing', 'error');
+        return;
+      }
+
+      console.log('[MovieDetailScreen] Submitting review for film:', tmdbIdentifier, 'Rating:', userRating, 'Type:', type);
+      await reviewService.submitReview(tmdbIdentifier, userRating, reviewText, type);
+
+      // Notify PlaylistDetailScreen to reload on return
+      if (navigation && navigation.setParams) {
+        navigation.setParams({ ...route.params, ratingUpdated: true });
+      }
+
+      // After submitting review, always check backend status and prompt if needed
+      const getBackendWatchStatus = async () => {
+        try {
+          const tmdbId = resolveTmdbId();
+          if (!tmdbId) return '';
+          const playlistsResponse = await playlistService.getPlaylists();
+          const allPlaylists = Array.isArray(playlistsResponse)
+            ? playlistsResponse
+            : (playlistsResponse.results || []);
+          const statusPlaylists = ['Watched', 'Watching', 'To Watch', 'Did Not Finish'];
+          for (const playlistName of statusPlaylists) {
+            const playlist = allPlaylists.find(p => p.title === playlistName && p.is_status_playlist);
+            if (playlist) {
+              const itemsResponse = await playlistService.getPlaylistItems(playlist.id);
+              const items = Array.isArray(itemsResponse)
+                ? itemsResponse
+                : (itemsResponse.results || []);
+              const isInPlaylist = items.some(item =>
+                item.movie?.id === movieDetails?.id ||
+                item.movie?.tmdb_id === tmdbIdentifier ||
+                item.movie?.id === movie?.id
+              );
+              if (isInPlaylist) return playlistName;
+            }
+          }
+          return '';
+        } catch (e) {
+          return '';
+        }
+      };
+
+      let effectiveStatus = await getBackendWatchStatus();
+      // Prompt if status is 'To Watch', 'Watching', or not set at all
+      if (effectiveStatus === 'To Watch' || effectiveStatus === 'Watching' || !effectiveStatus) {
+        setDecisionModal({
+          visible: true,
+          title: 'Update Watch Status',
+          message: 'Did you finish watching it or did you not continue?',
+          onYes: async () => {
+            setDecisionModal(modal => ({ ...modal, visible: false }));
+            await handleSetStatus('Watched');
+          },
+          onNo: async () => {
+            setDecisionModal(modal => ({ ...modal, visible: false }));
+            await handleSetStatus('Did Not Finish');
+          },
+          onCancel: () => setDecisionModal(modal => ({ ...modal, visible: false })),
+        });
+      }
+
+      console.log('[MovieDetailScreen] Review submitted successfully');
+      showToast('Review submitted successfully!', 'success');
+
+      // Reload only user's review (pass mediaType for correct lookup)
+      const review = await reviewService.getUserReview({ tmdbId: tmdbIdentifier, mediaType: type });
+      setUserReview(review);
+      setUserRating(review?.rating || 0);
+      setReviewText(review?.review_text || '');
+      setShowReviewModal(false);
+    } catch (error) {
+      console.log('[MovieDetailScreen] Review submission error:', error.message);
+      console.log('[MovieDetailScreen] Error formatted message:', error.formattedMessage);
+      showToast('Failed to submit review: ' + (error.formattedMessage || error.message), 'error');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleDeleteReview = async () => {
+    if (!userReview) return;
+    const doDelete = async () => {
+      try {
+        console.log('[MovieDetailScreen] Attempting delete', {
+          reviewId: userReview?.id,
+          tmdbId: resolveTmdbId(),
+          movieId: userReview?.movie || movieDetails?.id || movie?.id,
+        });
+
+        await reviewService.deleteReview({
+          reviewId: userReview?.id,
+          tmdbId: resolveTmdbId(),
+          movieId: userReview?.movie || movieDetails?.id || movie?.id,
+        });
+
+        showToast('Review deleted', 'success');
+        setUserReview(null);
+        setUserRating(0);
+        setReviewText('');
+
+        // Confirm removal by refetching
+        const refreshed = await reviewService.getUserReview({
+          tmdbId: resolveTmdbId(),
+          movieId: movieDetails?.id || movie?.id,
+        });
+        if (!refreshed) {
+          setUserReview(null);
+        } else {
+          console.warn('[MovieDetailScreen] Review still present after delete attempt', refreshed);
+        }
+      } catch (error) {
+        console.error('[MovieDetailScreen] Delete review error:', error.response?.data || error.message || error);
+        const formatted = error.formattedMessage || error.response?.data?.error || error.message;
+        showToast(`Failed to delete review${formatted ? `: ${formatted}` : ''}`, 'error');
+      }
+    };
+
+    // On web, run delete without Alert (native alert can be flaky on web)
+    if (Platform.OS === 'web') {
+      doDelete();
+      return;
+    }
+
+    Alert.alert('Delete Review', 'Are you sure you want to delete this review?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: doDelete,
+      }
+    ]);
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!isLoggedIn) {
+      showToast('Please sign in to add favorites', 'error');
+      navigation.navigate('Sign In');
+      return;
+    }
+
+    setLoadingFavorite(true);
+    try {
+      const tmdb = resolveTmdbId();
+      const type = resolveMediaType();
+
+      console.log('[handleToggleFavorite] TMDB ID:', tmdb, 'Type:', type, 'isFavorite:', isFavorite);
+
+      if (!tmdb) {
+        showToast('Movie information is missing', 'error');
+        setLoadingFavorite(false);
+        return;
+      }
+
+      if (isFavorite) {
+        console.log('[handleToggleFavorite] Removing favorite...');
+        await favoriteService.removeFavoriteByTmdb(tmdb);
+        setIsFavorite(false);
+        showToast('Removed from favorites', 'success');
+      } else {
+        console.log('[handleToggleFavorite] Adding favorite...');
+        await favoriteService.addFavorite(tmdb, type);
+        setIsFavorite(true);
+        showToast('Added to favorites ❤️', 'success');
+      }
+    } catch (error) {
+      console.error('[handleToggleFavorite] Failed to update favorites:', error);
+      console.error('[handleToggleFavorite] Error details:', error.response?.data);
+      showToast(error.formattedMessage || error.message || 'Failed to update favorites', 'error');
+    } finally {
+      setLoadingFavorite(false);
+    }
+  };
+
+  const [decisionModal, setDecisionModal] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    onYes: null,
+    onNo: null,
+    onCancel: null,
+  });
+
+  useEffect(() => {
+    if (route.params?.statusUpdated) {
+      // Wait for movieDetails to be loaded before reloading status
+      if (!movieDetails) return;
+      const reloadStatus = async () => {
+        if (!isLoggedIn) return;
+        try {
+          const tmdbId = resolveTmdbId();
+          if (!tmdbId) {
+            setWatchStatus('');
+            return;
+          }
+          const playlistsResponse = await playlistService.getPlaylists();
+          const allPlaylists = Array.isArray(playlistsResponse)
+            ? playlistsResponse
+            : (playlistsResponse.results || []);
+          const statusPlaylists = ['Watched', 'Watching', 'To Watch', 'Did Not Finish'];
+          for (const playlistName of statusPlaylists) {
+            const playlist = allPlaylists.find(p => p.title === playlistName && p.is_status_playlist);
+            if (playlist) {
+              const itemsResponse = await playlistService.getPlaylistItems(playlist.id);
+              const items = Array.isArray(itemsResponse)
+                ? itemsResponse
+                : (itemsResponse.results || []);
+              const isInPlaylist = items.some(item =>
+                item.movie?.id === movieDetails?.id ||
+                item.movie?.tmdb_id === tmdbId ||
+                item.movie?.id === movie?.id
+              );
+              if (isInPlaylist) {
+                setWatchStatus(playlistName);
+                return;
+              }
+            }
+          }
+          setWatchStatus('');
+        } catch (error) {
+          console.error('[MovieDetailScreen] Failed to reload watch status:', error);
+        }
+      };
+      reloadStatus();
+      // Remove the param so it doesn't reload again
+      navigation.setParams({ ...route.params, statusUpdated: false });
+    }
+  }, [route.params?.statusUpdated, isLoggedIn, movieDetails]);
+
   if (loading) {
     return (
       <View style={[globalStyles.loadingContainer, { backgroundColor: colors.background }]}>
@@ -297,7 +889,7 @@ const MovieDetailScreen = ({ route, navigation }) => {
         <Text style={[globalStyles.loadingText, { color: colors.textSecondary }]}>Loading details...</Text>
       </View>
     );
-  }
+  };
 
   if (error || !movieDetails) {
     return (
@@ -319,7 +911,15 @@ const MovieDetailScreen = ({ route, navigation }) => {
   }
 
   return (
-    <View style={[globalStyles.container, { backgroundColor: colors.background }]}>
+    <View style={[globalStyles.container, { backgroundColor: colors.background }]}> 
+      <DecisionModal
+        visible={decisionModal.visible}
+        title={decisionModal.title}
+        message={decisionModal.message}
+        onYes={decisionModal.onYes}
+        onNo={decisionModal.onNo}
+        onCancel={decisionModal.onCancel}
+      />
       {/* Close button in header - upper right */}
       <View style={styles.header}>
         <Text style={styles.headerTitle} numberOfLines={1}>
@@ -330,7 +930,7 @@ const MovieDetailScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <CustomScrollView style={{ flex: 1 }} contentContainerStyle={{ minHeight: Dimensions.get('window').height, paddingTop: 130 }}>
+      <CustomScrollView style={{ flex: 1 }} contentContainerStyle={{ minHeight: Dimensions.get('window').height }}>
         {/* Backdrop Image or Trailer Video */}
         {trailerUrl ? (
           <View style={styles.backdropVideo}>
@@ -393,8 +993,30 @@ const MovieDetailScreen = ({ route, navigation }) => {
             <Text style={styles.title}>{movieDetails.title}</Text>
             <Text style={styles.tagline}>{movieDetails.tagline}</Text>
             
-            <Text style={styles.type}>{movieDetails.type.toUpperCase()}</Text>
+            <Text style={styles.type}>
+              {movieDetails.type && (movieDetails.type.toLowerCase() === 'series' || movieDetails.type.toLowerCase() === 'tv')
+                ? 'SERIES'
+                : 'FILM'}
+            </Text>
             <Text style={styles.year}>{movieDetails.year}</Text>
+            
+            {/* Favorite Button */}
+            {isLoggedIn && (
+              <TouchableOpacity 
+                style={styles.favoriteButton} 
+                onPress={handleToggleFavorite}
+                disabled={loadingFavorite}
+              >
+                <Ionicons 
+                  name={isFavorite ? 'heart' : 'heart-outline'} 
+                  size={28} 
+                  color={isFavorite ? colors.error : colors.text} 
+                />
+                <Text style={[styles.favoriteText, { color: isFavorite ? colors.error : colors.text }]}>
+                  {isFavorite ? 'Favorited' : 'Add to Favorites'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -403,11 +1025,11 @@ const MovieDetailScreen = ({ route, navigation }) => {
           <View style={styles.actions}>
             <View style={styles.statusButtons}>
               <TouchableOpacity 
-                style={[styles.statusButton, watchStatus === 'Watched' && styles.statusActive]}
-                onPress={() => handleSetStatus('Watched')}
+                style={[styles.statusButton, watchStatus === 'To Watch' && styles.statusActive]}
+                onPress={() => handleSetStatus('To Watch')}
               >
-                <Text style={[styles.statusButtonText, watchStatus === 'Watched' && styles.statusActiveText]}>
-                  Watched
+                <Text style={[styles.statusButtonText, watchStatus === 'To Watch' && styles.statusActiveText]}>
+                  To Watch
                 </Text>
               </TouchableOpacity>
               
@@ -421,11 +1043,20 @@ const MovieDetailScreen = ({ route, navigation }) => {
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.statusButton, watchStatus === 'To Watch' && styles.statusActive]}
-                onPress={() => handleSetStatus('To Watch')}
+                style={[styles.statusButton, watchStatus === 'Watched' && styles.statusActive]}
+                onPress={() => handleSetStatus('Watched')}
               >
-                <Text style={[styles.statusButtonText, watchStatus === 'To Watch' && styles.statusActiveText]}>
-                  To Watch
+                <Text style={[styles.statusButtonText, watchStatus === 'Watched' && styles.statusActiveText]}>
+                  Watched
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.statusButton, watchStatus === 'Did Not Finish' && styles.statusActive]}
+                onPress={() => handleSetStatus('Did Not Finish')}
+              >
+                <Text style={[styles.statusButtonText, watchStatus === 'Did Not Finish' && styles.statusActiveText]}>
+                  Did Not Finish
                 </Text>
               </TouchableOpacity>
             </View>
@@ -448,7 +1079,11 @@ const MovieDetailScreen = ({ route, navigation }) => {
           <View style={styles.infoGrid}>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Type</Text>
-              <Text style={styles.infoValue}>{movieDetails.type}</Text>
+              <Text style={styles.infoValue}>
+                {movieDetails.type && (movieDetails.type.toLowerCase() === 'series' || movieDetails.type.toLowerCase() === 'tv')
+                  ? 'Series'
+                  : 'Film'}
+              </Text>
             </View>
             
             <View style={styles.infoItem}>
@@ -471,7 +1106,7 @@ const MovieDetailScreen = ({ route, navigation }) => {
               <Text style={styles.infoValue}>{formatRuntime(movieDetails.runtime)}</Text>
             </View>
             
-            {movieDetails.type === 'series' ? (
+            {movieDetails.type === 'Series' ? (
               <>
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Seasons</Text>
@@ -510,6 +1145,59 @@ const MovieDetailScreen = ({ route, navigation }) => {
                 ))}
               </View>
             </>
+          )}
+        </View>
+
+        {/* User Review Section (Privacy-Focused) */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeader}>
+            <Text style={styles.sectionTitle}>My Review</Text>
+            {isLoggedIn && (
+              <TouchableOpacity
+                style={styles.leaveReviewButton}
+                onPress={() => setShowReviewModal(true)}
+              >
+                <Ionicons name="create-outline" size={18} color={colors.primary} />
+                <Text style={styles.leaveReviewButtonText}>
+                  {userReview ? 'Edit' : 'Add Review'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {userReview ? (
+            <View style={styles.reviewItem}>
+              <View style={styles.reviewHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reviewUsername}>Your Review</Text>
+                  <View style={styles.reviewStars}>
+                    {[...Array(5)].map((_, i) => (
+                      <Text key={i} style={styles.star}>
+                        {i < userReview.rating ? '⭐' : '☆'}
+                      </Text>
+                    ))}
+                  </View>
+                  <Text style={[styles.reviewDate, { fontSize: 12, color: colors.textSecondary, marginTop: 8 }]}> 
+                    {new Date(userReview.created_at).toLocaleDateString()} at {new Date(userReview.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                {isLoggedIn && (
+                  <TouchableOpacity
+                    onPress={handleDeleteReview}
+                    style={{ padding: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.error} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              {userReview.review_text ? (
+                <Text style={styles.reviewText}>{userReview.review_text}</Text>
+              ) : null}
+            </View>
+          ) : (
+            <Text style={styles.noReviewsText}>
+              {`You haven't reviewed this ${resolveMediaType() === 'tv' ? 'series' : 'film'} yet`}
+            </Text>
           )}
         </View>
         
@@ -634,11 +1322,128 @@ const MovieDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Review Modal */}
+      <Modal
+        visible={showReviewModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowReviewModal(false);
+          setUserRating(0);
+          setReviewText('');
+        }}
+      >
+        <View style={[styles.modalOverlay, { justifyContent: 'flex-end' }]}>
+          <View style={[styles.modalContent, { borderRadius: 20, maxHeight: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {userReview ? 'Edit Review' : 'Leave a Review'}
+              </Text>
+              <TouchableOpacity onPress={() => {
+                setShowReviewModal(false);
+                setUserRating(0);
+                setReviewText('');
+              }}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.reviewModalContent} showsVerticalScrollIndicator={false}>
+              {/* Movie info */}
+              <View style={styles.reviewMovieInfo}>
+                {movieDetails.poster_path && (
+                  <Image
+                    source={{ uri: movieDetails.poster_path }}
+                    style={styles.reviewMoviePoster}
+                  />
+                )}
+                <View style={styles.reviewMovieDetails}>
+                  <Text style={styles.reviewMovieTitle} numberOfLines={2}>
+                    {movieDetails.title}
+                  </Text>
+                  <Text style={styles.reviewMovieYear}>
+                    {movieDetails.year || 'N/A'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Rating Stars */}
+              <View style={styles.ratingSection}>
+                <Text style={styles.ratingLabel}>Your Rating</Text>
+                <View style={styles.starsContainer}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity
+                      key={star}
+                      onPress={() => setUserRating(star)}
+                      style={styles.starButton}
+                    >
+                      <Text style={styles.ratingStarIcon}>
+                        {userRating >= star ? '⭐' : '☆'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {userRating > 0 && (
+                  <Text style={styles.ratingText}>{userRating} out of 5 stars</Text>
+                )}
+              </View>
+
+              {/* Review Text */}
+              <View style={styles.reviewTextSection}>
+                <Text style={styles.reviewTextLabel}>Your Review (Optional)</Text>
+                <TextInput
+                  style={styles.reviewTextInput}
+                  placeholder="Share your thoughts about this movie..."
+                  placeholderTextColor={colors.textSecondary}
+                  multiline={true}
+                  numberOfLines={5}
+                  value={reviewText}
+                  onChangeText={setReviewText}
+                  maxLength={500}
+                />
+                <Text style={styles.charCount}>
+                  {reviewText.length}/500
+                </Text>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.reviewButtonsContainer}>
+                <TouchableOpacity
+                  style={[styles.submitButton, { opacity: userRating === 0 ? 0.5 : 1 }]}
+                  onPress={handleSubmitReview}
+                  disabled={submittingReview || userRating === 0}
+                >
+                  {submittingReview ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.submitButtonText}>
+                      {userReview ? 'Update Review' : 'Submit Review'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Delete button removed here; delete exists next to review card */}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Toast Notification */}
+      {toast.visible && (
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          type={toast.type}
+          onHide={hideToast}
+        />
+      )}
     </View>
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -646,14 +1451,9 @@ const styles = {
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 12,
-    backgroundColor: 'rgba(26, 27, 29, 0.95)',
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
   },
   closeButton: {
     width: 40,
@@ -772,6 +1572,7 @@ const styles = {
   statusButtons: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    flexWrap: 'wrap',
     marginBottom: 24,
   },
   statusButton: {
@@ -911,7 +1712,7 @@ const styles = {
   modalContent: {
     backgroundColor: colors.card,
     borderRadius: 16,
-    paddingBottom: 40,
+    paddingBottom: 20,
     maxHeight: '80%',
     width: '100%',
     maxWidth: 400,
@@ -920,19 +1721,22 @@ const styles = {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: colors.text,
   },
   playlistItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
@@ -1045,11 +1849,375 @@ const styles = {
     padding: 20,
     alignItems: 'center',
   },
+  progressCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  progressHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressStatusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  progressStatusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  progressStatusPillActive: {
+    borderColor: colors.primary,
+  },
+  progressStatusText: {
+    color: colors.text,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  progressStatusTextActive: {
+    color: colors.primary,
+  },
+  progressInputsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  progressInputItem: {
+    flex: 1,
+  },
+  progressInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    marginTop: 4,
+  },
+  progressStarsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginVertical: 8,
+  },
+  progressNotes: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: 12,
+    minHeight: 80,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    marginTop: 6,
+  },
+  saveProgressButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  saveProgressText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  historyItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  historyText: {
+    color: colors.text,
+    fontSize: 12,
+  },
+  progressSelect: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.surface,
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressSelectText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  selectWithClear: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+  clearButton: {
+    padding: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalOverlaySimple: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalSheet: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 12,
+    padding: 16,
+  },
+  modalOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  modalOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  playlistList: {
+    maxHeight: 300,
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
   emptySubtext: {
     fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
   },
-};
+  // Review styles
+  reviewsSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  reviewsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  leaveReviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    gap: 6,
+  },
+  leaveReviewButtonText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  noReviewsText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  reviewsList: {
+    gap: 12,
+  },
+  reviewItem: {
+    backgroundColor: colors.surface,
+    padding: 12,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  deleteReviewButton: {
+    backgroundColor: '#ff4444',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+  },
+  deleteReviewText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  reviewUsername: {
+    fontWeight: '600',
+    color: colors.text,
+    fontSize: 14,
+  },
+  reviewStars: {
+    flexDirection: 'row',
+    marginTop: 4,
+    gap: 2,
+  },
+  star: {
+    fontSize: 14,
+    color: '#fff',
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  reviewText: {
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  // Review Modal styles
+  reviewModalContent: {
+    padding: 16,
+  },
+  reviewMovieInfo: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    gap: 12,
+  },
+  reviewMoviePoster: {
+    width: 60,
+    height: 90,
+    borderRadius: 8,
+  },
+  reviewMovieDetails: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  reviewMovieTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  reviewMovieYear: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  ratingSection: {
+    marginBottom: 20,
+  },
+  ratingLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  starButton: {
+    padding: 8,
+  },
+  ratingStarIcon: {
+    fontSize: 40,
+  },
+  ratingText: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  reviewTextSection: {
+    marginBottom: 20,
+  },
+  reviewTextLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  reviewTextInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 13,
+    color: colors.text,
+    textAlignVertical: 'top',
+    minHeight: 120,
+  },
+  charCount: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'right',
+    marginTop: 6,
+  },
+  reviewButtonsContainer: {
+    gap: 10,
+    marginBottom: 20,
+  },
+  submitButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    backgroundColor: '#ff4444',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  favoriteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  favoriteText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+});
 
 export default MovieDetailScreen;

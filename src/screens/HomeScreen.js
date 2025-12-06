@@ -514,7 +514,32 @@ const HomeScreen = ({ navigation }) => {
     try {
       setLoadingPlaylists(true);
       const userPlaylists = await playlistService.getPlaylists();
-      setPlaylists(Array.isArray(userPlaylists) ? userPlaylists : (userPlaylists.results || []));
+      const playlistsArray = Array.isArray(userPlaylists) ? userPlaylists : (userPlaylists.results || []);
+      
+      // Sort playlists: pin To Watch/Watching/Watched, then user lists + Did Not Finish by updated_at
+      const pinnedStatusOrder = ['To Watch', 'Watching', 'Watched'];
+      const sortedPlaylists = [...playlistsArray].sort((a, b) => {
+        // Check if item is a pinned status playlist
+        const aIsPinned = pinnedStatusOrder.includes(a.title);
+        const bIsPinned = pinnedStatusOrder.includes(b.title);
+        
+        // Pinned playlists come first, in their defined order
+        if (aIsPinned && !bIsPinned) return -1;
+        if (!aIsPinned && bIsPinned) return 1;
+        
+        // If both are pinned, sort by their position in pinnedStatusOrder
+        if (aIsPinned && bIsPinned) {
+          const aIdx = pinnedStatusOrder.indexOf(a.title);
+          const bIdx = pinnedStatusOrder.indexOf(b.title);
+          return aIdx - bIdx;
+        }
+        
+        // For unpinned (Did Not Finish + user lists), sort by updated_at (most recent first)
+        const aTime = new Date(a.updated_at).getTime();
+        const bTime = new Date(b.updated_at).getTime();
+        return bTime - aTime;
+      });
+      setPlaylists(sortedPlaylists);
       setShowPlaylistModal(true);
     } catch (error) {
       console.error('Error loading playlists:', error);

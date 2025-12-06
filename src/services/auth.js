@@ -1,6 +1,8 @@
 // src/services/auth.js - UPDATED WITH PERSISTENCE
 import api, { setAuthToken, getAuthToken, setCurrentUser, getCurrentUser } from './api';
 import { playlistService } from './playlistService';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Create an event emitter for auth state changes
 const authListeners = new Set();
@@ -30,6 +32,15 @@ export const authService = {
           email: response.data.email
         };
         setCurrentUser(user);
+        // Persist auth on native platforms
+        try {
+          if (Platform.OS !== 'web') {
+            await AsyncStorage.setItem('trackr_auth_token', response.data.access);
+            await AsyncStorage.setItem('trackr_user', JSON.stringify(user));
+          }
+        } catch (err) {
+          console.warn('Failed to persist auth on signup:', err);
+        }
         console.log('Sign up successful, token set');
 
         // NOTE: Default playlists creation disabled - new users start with 0 playlists
@@ -68,6 +79,15 @@ export const authService = {
           email: response.data.email
         };
         setCurrentUser(user);
+        // Persist auth on native platforms
+        try {
+          if (Platform.OS !== 'web') {
+            await AsyncStorage.setItem('trackr_auth_token', response.data.access);
+            await AsyncStorage.setItem('trackr_user', JSON.stringify(user));
+          }
+        } catch (err) {
+          console.warn('Failed to persist auth on signIn:', err);
+        }
         console.log('Sign in successful, token set');
 
         // Check if user has any playlists, if not, create default ones
@@ -146,6 +166,15 @@ export const authService = {
     console.log('Starting sign out process...');
     setAuthToken(null);
     setCurrentUser(null);
+    // Remove persisted auth on native platforms
+    try {
+      if (Platform.OS !== 'web') {
+        AsyncStorage.removeItem('trackr_auth_token');
+        AsyncStorage.removeItem('trackr_user');
+      }
+    } catch (err) {
+      console.warn('Failed to clear persisted auth on signOut:', err);
+    }
     console.log('Auth token and user cleared');
     console.log('Notifying all listeners of sign out...');
     this.notifyAuthChange(false, null);
@@ -208,6 +237,43 @@ export const authService = {
     }
   },
 
+  // Request a password reset code (unauthenticated)
+  async requestPasswordResetCode(email) {
+    try {
+      const response = await api.post('/auth/password-reset/request/', { email });
+      return response.data;
+    } catch (error) {
+      console.error('Request password reset code error:', error);
+      throw error.formattedMessage || error.response?.data || 'Failed to send reset code';
+    }
+  },
+
+  async verifyPasswordResetCode({ userId, code }) {
+    try {
+      const response = await api.post('/auth/password-reset/verify/', {
+        user_id: userId,
+        code,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Verify password reset code error:', error);
+      throw error.formattedMessage || error.response?.data || 'Failed to verify code';
+    }
+  },
+
+  async confirmPasswordReset({ userId, newPassword }) {
+    try {
+      const response = await api.post('/auth/password-reset/confirm/', {
+        user_id: userId,
+        new_password: newPassword,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Confirm password reset error:', error);
+      throw error.formattedMessage || error.response?.data || 'Failed to reset password';
+    }
+  },
+
   // Clear any demo/pre-set user data
   clearDemoData() {
     // Clear any stored demo user data
@@ -229,10 +295,24 @@ export const authService = {
     // Clear any demo data first
     this.clearDemoData();
     
-    // Check if we have stored auth data
+    // For native platforms try to restore from AsyncStorage
+    try {
+      if (Platform.OS !== 'web') {
+        const storedToken = await AsyncStorage.getItem('trackr_auth_token');
+        const storedUser = await AsyncStorage.getItem('trackr_user');
+        if (storedToken) setAuthToken(storedToken);
+        if (storedUser) {
+          try { setCurrentUser(JSON.parse(storedUser)); } catch (err) { console.warn('Failed to parse stored user', err); }
+        }
+      }
+    } catch (err) {
+      console.warn('Error restoring auth from storage:', err);
+    }
+
+    // Check if we have stored auth data (in-memory or restored)
     const token = getAuthToken();
     const user = getCurrentUser();
-    
+
     if (token && user) {
       console.log('Found stored auth data, validating...');
       return await this.validateToken();
@@ -261,5 +341,33 @@ export const authService = {
         console.error('Auth listener error:', error);
       }
     });
+  },
+
+  // Request a 6-digit password change code via email
+  async requestPasswordChangeCode(email) {
+    try {
+      // Backend route list shows: auth/change-password/request/
+      const response = await api.post('/auth/change-password/request/', { email });
+      return response.data;
+    } catch (error) {
+      console.error('Request password change code error:', error);
+      throw error.formattedMessage || error.response?.data || 'Failed to send verification code';
+    }
+  },
+
+  // Complete password change with email + code + old/new passwords
+  async changePasswordWithCode({ email, code, oldPassword, newPassword, confirmPassword }) {
+    try {
+      // Backend route list shows: auth/change-password/
+      const response = await api.post('/auth/change-password/', {
+        code,
+        current_password: oldPassword,
+        new_password: newPassword,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Change password with code error:', error);
+      throw error.formattedMessage || error.response?.data || 'Failed to change password';
+    }
   }
 };

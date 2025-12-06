@@ -37,7 +37,9 @@ const Header = ({
 
   return (
     <View style={globalStyles.header}>
-      <Text style={globalStyles.logo}>TrackR</Text>
+      <TouchableOpacity onPress={() => navigation.navigate('Home')}>
+        <Text style={globalStyles.logo}>TrackR</Text>
+      </TouchableOpacity>
       
       <View style={globalStyles.rightContainer}>
         <View style={globalStyles.searchContainer}>
@@ -65,12 +67,6 @@ const Header = ({
         </View>
         
         <View style={globalStyles.menuContainer}>
-          <TouchableOpacity onPress={() => navigation.navigate('Home')}>
-            <Text style={[
-              globalStyles.menuText, 
-              activeScreen === 'Home' && globalStyles.activeMenuText
-            ]}>Home</Text>
-          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Films')}>
             <Text style={[
               globalStyles.menuText, 
@@ -83,11 +79,11 @@ const Header = ({
               activeScreen === 'Series' && globalStyles.activeMenuText
             ]}>Series</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Playlist')}>
+          <TouchableOpacity onPress={() => navigation.navigate('Watchlist')}>
             <Text style={[
               globalStyles.menuText, 
-              activeScreen === 'Playlist' && globalStyles.activeMenuText
-            ]}>Playlist</Text>
+              (activeScreen === 'Watchlist' || activeScreen === 'Playlist') && globalStyles.activeMenuText
+            ]}>Watchlist</Text>
           </TouchableOpacity>
         </View>
 
