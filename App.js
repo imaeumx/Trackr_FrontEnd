@@ -137,12 +137,8 @@ const App = () => {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Films" component={FilmsScreen} />
         <Stack.Screen name="Series" component={SeriesScreen} />
-        <Stack.Screen name="Playlist">
-          {props => <PlaylistScreen {...props} showReloadIcon={true} />}
-        </Stack.Screen>
-        <Stack.Screen name="Watchlist">
-          {props => <PlaylistScreen {...props} showReloadIcon={true} />}
-        </Stack.Screen>
+        <Stack.Screen name="Playlist" component={PlaylistScreen} />
+        <Stack.Screen name="Watchlist" component={PlaylistScreen} />
         <Stack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
         <Stack.Screen name="Sign In" component={SignInScreen} />
         <Stack.Screen name="MovieDetail" component={MovieDetailScreen} />
