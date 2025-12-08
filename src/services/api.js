@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 
 // Base URL - your app found localhost:8000
-const BASE_URL = 'http://localhost:8000/api';
+const BASE_URL = 'https://trackr-backend-3lxu.onrender.com/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
